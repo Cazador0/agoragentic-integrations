@@ -346,7 +346,241 @@ WCAG 2.2 AA as a CI-enforced budget, treated as net-new — the research found *
 Continuous: every new operation lands as a registry entry first (schemas + annotations + scope); heads pick it up mechanically; weekly registry-hygiene and a11y budgets in CI.
 
 ---
-<!-- SECTION-C-PLACEHOLDER -->
+
+## 6. Solution C — **Backline Arena** (enterprise modular platform)
+
+> A booking agency's CRM is three systems wearing one coat: a **graph**, a **ledger**, and an **agent host**. Solution C optimizes for the last two never being bolted on later.
+
+### 6.1 Philosophy — five commitments
+
+1. **One domain core, many heads.** All business logic in `packages/services/*` returning typed DTOs; the Next.js UI, REST API, MCP server, A2A worker, and CLI are thin wrappers handling presentation and transport only. The notebooklm layering rule and onyx's Tool-ABC-with-`NullEmitter` pattern promoted to an architectural law **enforced by an ESLint boundary rule**. *A feature that cannot be driven headlessly does not ship.*
+2. **Agents are principals, not features.** Every agent — internal or external, MCP or ACP or A2A — has an identity, a scope, a tool allowlist, a budget, and an audit trail. Every field an agent writes is stamped with `source`, `agentRunId`, `model`, `confidence`. *"Which agent changed this settlement line and on whose approval" is a first-class query, not a log grep.*
+3. **Human gates are persisted records, not in-memory channels.** Zed's `oneshot` inside `ToolCallStatus::WaitingForConfirmation{respond_tx}` cannot survive a web request boundary. Backline persists a `pending_approval` row, blocks the agent's JSON-RPC request on Postgres `LISTEN/NOTIFY` + timeout, and resolves it when a human clicks.
+4. **Flexible schema, typed edges, hard money.** Property-bag records with a runtime property-metadata layer so an agency adds "Territory Split %" without a migration — but bookings, contracts, and settlements get hard relational columns, exclusion constraints, and `NUMERIC` money. Money never touches a float.
+5. **Retrieval is hierarchical because relationships are.** A RAPTOR-style tree (leaf = one email/note/settlement line; layer 1 = per-thread/per-show; layer 2 = per-tour/per-release; root = per-relationship) is the only way an agent answers "what's our history with this promoter" inside a context window while still drilling to the exact contract clause. Layer provenance rides on every retrieval result so the UI renders an evidence ladder.
+
+**Honest positioning:** this is what you build when the customer is an agency *group* — multiple rosters, a label arm, sub-agents in three territories, a finance team, and SOC 2 questions from a major. It is over-engineered for a two-person boutique.
+
+### 6.2 Stack
+
+**Node 22 LTS, not Bun** — the worker fleet needs mature `undici`/OTel/Temporal-class ecosystem support and long-horizon LTS, and Bun's Node-compat gaps on streaming client request bodies and `node:cluster` FD passing are exactly the surfaces a sync worker hits. TypeScript 5.7 strict, pnpm 9 workspaces + Turborepo.
+
+**Packages:** `@backline/domain` (entities, zod schemas, invariants — zero I/O), `db` (Drizzle + migrations + scope helpers), `services` (all business logic; the only layer allowed to touch `db`), `agents` (runtime, registry, connections, ACP/MCP clients), `connectors`, `rag`, `api` (Fastify), `worker` (BullMQ), `web` (Next.js 15), `ui`, `sdk`, `cli` (`bl`).
+
+| Layer | Choice | Rationale |
+|---|---|---|
+| API server | **Fastify 5** | Not NestJS (DI decorators cost bundle/startup for little gain); not Next route handlers (the API must run without the UI) |
+| Contract | zod 3 → `@asteasolutions/zod-to-openapi` → OpenAPI 3.1 → `openapi-typescript`/`openapi-fetch` | The *same* zod schemas become MCP `inputSchema`/`outputSchema` and A2A skill schemas — one schema, four surfaces |
+| Database | **PostgreSQL 17** + `pgvector` (HNSW), `btree_gist`, `pg_trgm`, `pgcrypto`; Drizzle | **No Vespa, no OpenSearch** — an agency corpus is millions of rows, not billions; Postgres FTS + pgvector + a reranker covers hybrid search |
+| Queue | **BullMQ 5 on Redis 7** | Six named queues mirroring onyx's worker fleet: `sync`, `index`, `agent`, `notify`, `finance`, `beat`; a `--all-queues` consolidated process exists for small deployments |
+| Identity | **Keycloak 26** (OIDC + SAML + SCIM) | "A major label wants SSO" is not optional at this tier; Backline is an OAuth 2.1 resource server |
+| LLM | Vercel AI SDK 5 wrapped by `@backline/agents/llm` | Adds a **model-profile capability registry** (pydantic-ai's anti-if-ladder split), an **LLMFlow tag registry** emitting `UNTAGGED_*` spans for missed instrumentation (onyx), and per-tenant/agent/run cost accounting. Ollama is a first-class provider for on-prem |
+| Agent protocols | `@modelcontextprotocol/sdk`, `agent-client-protocol`, `@a2a-js/sdk` | All three normalize into one internal `AgentSession` event stream |
+| RAG | `@backline/rag` | Sentence-boundary token-budget chunking (RAPTOR port), pgvector HNSW, **TS-native recursive agglomerative clustering with soft multi-membership** replacing UMAP+GMM+BIC — a deliberate simplification (see tradeoffs) |
+| Observability | OTel → Tempo/Loki/Mimir, Langfuse for LLM runs, `pino` with a scrubber registry every secret registers into | 100% agent-call trace coverage by construction |
+| Frontend | Next.js 15 App Router (RSC record pages, client agent panels), Radix + Tailwind 4 tokens + CVA, `cmdk`, TanStack Query/Virtual, `react-aria` surgically | Storybook 9 with `addon-a11y` |
+| Markdown | `remark-parse → gfm → math → directive → crm-mention → rehype-sanitize → katex → shiki` | **mdast `position` offsets are load-bearing** — the direct replacement for pulldown-cmark's source ranges |
+| Testing | Vitest, Testcontainers, Playwright + `@axe-core/playwright`, `msw` | a11y assertions on every page object |
+| Deploy | Docker Compose (`lite`/`standard` profiles) + Helm | Migrations gated in CI |
+
+### 6.3 Architecture — modular monolith + worker fleet + protocol edge
+
+```
+          ┌──────────────────── protocol edge (Fastify) ─────────────────────┐
+browser  ─┤ /api/v1/*   REST + OpenAPI 3.1                                   │
+mobile   ─┤ /mcp        MCP Streamable HTTP (stateless + Postgres EventStore)│
+MCP hosts─┤ /a2a        A2A JSON-RPC + /.well-known/agent-card.json          │
+A2A      ─┤ /acp        ACP over WebSocket (browser agent clients)           │
+ACP      ─┤ /events     SSE (thread + registry + record change streams)      │
+webhooks ─┤ /hooks/:connector  (signature-verified)                          │
+          └───────────────────────────┬─────────────────────────────────────┘
+                                      │ every request → RequestContext
+                                      │ {tenantId, principal, scopes, traceId, runId?}
+  ┌───────────────────────────────────▼──────────────────────────────────────┐
+  │ @backline/services — ALL business logic. Typed DTOs. ServiceError only.  │
+  │ crm/ · music/ · booking/ · finance/ · pipeline/ · agents/ · registry/    │
+  └──┬──────────────┬──────────────────┬───────────────────┬─────────────────┘
+     │              │                  │                   │
+   db/          agents/            connectors/           rag/
+  (Drizzle,   (registry, conn    (Load/Poll/Slim/     (chunk, embed,
+   scope,      store, ACP/MCP     Checkpoint/PermSync  RAPTOR build,
+   journal)    clients, approvals) OAuth, WriteBack)   hybrid retrieve)
+     │              │                  │                   │
+  ┌──▼──────────────▼──────────────────▼───────────────────▼─────────────────┐
+  │ Postgres 17 (records, journal, vectors, tree) · Redis 7 (BullMQ, locks)  │
+  │ S3 (documents) · Keycloak (identity) · external agent processes (sandbox)│
+  └──────────────────────────────────────────────────────────────────────────┘
+```
+
+**RequestContext / tenancy.** Node `AsyncLocalStorage` carries `{tenantId, principal, scopes, traceId, agentRunId?}` — the TS analogue of onyx's tenant contextvar and pydantic-ai's `RunContext`. Tenancy is **schema-per-tenant** for agency groups (per-request `SET search_path`) with a shared `public` schema for the registry index cache, plus **row-level scope** inside a tenant for roster partitioning (a sub-agent in Berlin sees only their roster). **No service accepts a raw `tenantId` argument — it reads context, so an agent cannot forge one.**
+
+**Layering rule, enforced.** `eslint-plugin-boundaries`: `api`/`web`/`worker`/`cli` may import `services` and `domain`; only `services` may import `db`, `connectors`, `rag`, `agents`. Violations fail CI. *This is what makes the headless surface free rather than a parallel implementation.*
+
+**Three event streams, one vocabulary.**
+
+1. **Record change journal.** Every write goes through `db.mutate()` which, in the same transaction, appends to `journal_event` (append-only; a Postgres trigger raises on UPDATE/DELETE). Rows carry `{offset BIGSERIAL, tenantId, objectType, objectId, action(CREATE|UPDATE|DELETE|MERGE|RESTORE|ASSOCIATION_ADDED|ASSOCIATION_REMOVED|STAGE_CHANGED), changedProperties, source, actor, occurredAt}`. **One append, five consumers**: the audit log, the outbound change feed (`GET /api/v1/journal?after=<offset>`), the automation trigger source, the RAG re-index queue, and the SSE feed for live UI. Push webhooks are a *projection* of the journal, never a separate path.
+2. **Agent session stream.** Zed's `AcpThreadEvent` vocabulary ported wholesale. Entries are index-addressed with a separate `EntryViewState` map lazily materializing heavy per-entry components (diff viewers, settlement tables, markdown previews).
+3. **Registry stream.** `AgentInstalled`, `AgentRemoved`, `AgentConnectionStateChanged`, `AgentVersionAvailable`, `RegistryRefreshed`.
+
+All three multiplex over one authenticated SSE endpoint; WebSocket upgrade only for ACP.
+
+**Workers.** Beat schedules dispatcher jobs (`checkForDueSyncs`, `checkForExpiringHolds`, `checkForStaleRaptorTrees`, `checkForSettlementDue`) — onyx's `check_for_X` shape. Long agent runs execute in the `agent` queue with heartbeat + watchdog: a run silent for 90s is marked `stalled`, its context serialized to a resumable record, and a `needs_human` signal emitted. **Time limits are implemented in-task, never trusted to the queue** (the onyx thread-pool lesson). Redis locks with heartbeat lease for singleton jobs. `Idempotency-Key` on every mutating operation, 24h replay window. Retry taxonomy is idempotency-aware: connect-phase failures retry, read/write timeouts on mutating calls do **not**.
+
+**Deployment profiles.** `lite`: one Postgres, one Redis, API+worker in one process, local disk, hosted embeddings — runs on a $40 VPS. `standard`: separate API/worker/beat, MinIO, Keycloak. `group`: HA Postgres, per-queue autoscaling, per-tenant schema, Keycloak cluster. **The lite profile is a hard requirement, not a nicety — without it this design is unsellable below the enterprise tier.**
+
+### 6.4 Data model — two layers, deliberately
+
+**Layer 1 — generic object core** (HubSpot-derived): `object_type` (standard types are *seeded, not hardcoded*), `property` (with `hasUniqueValue` giving ISRC/ISWC/UPC uniqueness without bespoke DDL, and `agentWritable:false` making "hand-curated artist bio" un-overwritable), `record` (`properties jsonb` + GIN, `externalIds jsonb` = `{salesforce, hubspot, monday, musicbrainz}` — the natural-key map that makes sync idempotent), `property_value_history` (**the answer to "prove the agent didn't invent this guarantee figure"**), `association` + `association_type` (typed labeled directional edges — what makes the booking graph queryable in one engine and lets an agency add "co-headliner of" without a migration), `pipeline`/`pipeline_stage` (with `writePermission: OPEN|CURATOR_ONLY|SYSTEM_ONLY`), `journal_event`, `merge_log` (venues and promoters duplicate constantly via imports).
+
+**Layer 2 — hard domain tables.**
+
+- **Roster**: `artist` (legal entity vs performing name, `feeFloorMinor`, `commissionRatePct`, agreement term and scope, rider/tech-spec document refs); `artist_member` (*bands ≠ people — a departing drummer must not break booking history*); `artist_team` (manager, business manager, label, publisher, publicist, tour manager, attorney, per territory).
+- **Catalog**: `work` (`iswc CITEXT UNIQUE NULLS DISTINCT`, PRO registration ref); `work_share` (`sharePct NUMERIC(7,4)`, role, PRO affiliation, territory) **with a deferred constraint asserting writer shares sum to 100.0000 per territory — splits are the #1 source of downstream royalty disputes, so they get a table, not a JSON blob**; `recording` (`isrc CHAR(12) UNIQUE`, version label, master owner, P-line); `release` (UPC/GTIN, catalog number, territory availability, C-line, DDEX ERN ref); `release_track`; `catalog`/`catalog_item` (ownership %, territory, term).
+- **Venues/buyers**: `venue` (**IANA `timezone` — every date computation is venue-local**, `capacityConfigurations jsonb[]`, curfew, load-in notes, house split default, facility fee, box-office contact, market); `market` (for "don't play the same market within 90 days"); `promoter` (tier, internal credit rating, deposit requirement, default deal template); `radius_clause` (radiusKm, daysBefore/After, exclusivity scope) — **enforced in the hold engine, surfaced as a conflict warning, never silently violated**.
+- **Bookings & the hold ladder** — the heart of the system:
+  - `booking` with `holdLevel SMALLINT NULL`, `holdExpiresAt`, `billing: headline|support|co_headline|festival`, `announceAt`, `onsaleAt`.
+  - Multiple holds share `(venueId, showDateLocal)` distinguished by level, with a **unique partial index on `(venueId, showDateLocal, holdLevel) WHERE status='hold'`**.
+  - **Exactly one confirmed show per venue/date is enforced by `EXCLUDE USING gist (venue_id WITH =, daterange(show_date_local, show_date_local, '[]') WITH &&) WHERE status IN ('confirmed','contracted','settled')` — the database, not application code, is the last line of defense against a double-booking, because an agent will eventually try.**
+  - `hold_challenge` (challenger, challenged, `respondByAt`, outcome `promoted|released|expired`) — the industry's "challenge the 1st hold, 24 hours to confirm or drop" ritual is a state machine with a `beat`-queue timer, not a calendar reminder. On expiry, holds cascade-promote (2nd→1st) inside one transaction and emit journal events.
+  - **Artist availability is derived, not stored**: a query over confirmed bookings + travel-time feasibility + `booking_availability_block` rows.
+- **Deals**: `offer` (versioned and **immutable once sent** — a counter creates version n+1; `dealType: flat|vs_percentage|door_deal|plus_bonus|festival_fee`, breakeven, bonus schedule, deposits); `contract` (**`termsSnapshot jsonb` frozen at execution — settlements reconcile against it, never against the live offer**; e-sign envelope, executed document, riders); `tour`/`tour_leg` with routing feasibility as a computed advisory surfaced in UI *and* as an agent tool.
+- **Money**: `settlement` (gross box office, tickets sold/comped, ticket scaling, taxes, facility/ticketing fees, guarantee, overage, expenses, artist net, agency commission, withholding, FX rate, approver) — **every money column `NUMERIC(19,4)` in minor units, no floats anywhere**; approved settlements are append-only and corrections create `settlement_adjustment` rows; `settlement_line` with a category taxonomy (production, hospitality, marketing, backline, local crew, buyout) for cross-tour analytics; `commission`/`payout` exportable to Xero/QuickBooks.
+- **Pipeline & core CRM**: `deal` for the *agency-side* pipeline (signing an artist, landing a festival slot, brand partnership) — **two pipelines, two vocabularies, one stage engine**; `contact`/`company` with music-specific properties; `activity` (including `type: agent_run`); `task` where **agents can own tasks**, so "the advancing agent owes you a tech pack by Friday" becomes visible work; `note` (markdown, `@`-mentions as typed URIs).
+- **Agent tables**: `agent_definition`, `agent_install`, `agent_connection_state`, `agent_run`, `agent_run_entry`, `pending_approval`, `elicitation`, `agent_scope_grant`, `agent_budget`, `protocol_frame_log`.
+- **RAG tables**: `rag_node` (layer, text, `embedding vector(1024)`, sourceRefs, model), `rag_node_child` (many-to-many — **soft cluster membership**), `rag_subject_state` (`lastBuiltJournalOffset`, `dirty`). **Incremental rebuild — the gap RAPTOR itself never closed — works by marking a subject dirty on journal append, then rebuilding only the leaf→root path containing changed leaves.**
+
+### 6.5 Agent Registry — additions beyond the shared port
+
+Solution C adds four things to the shared registry design in §2.1:
+
+1. **`requiredScopes[]` on registry entries**, rendered as an **OAuth-style consent screen** in the install dialog. A registry entry declares which `crm_*` tool families it needs; installing is an explicit grant.
+2. **Three hosting modes**, because a web CRM cannot spawn agents as browser child processes:
+   - **Container** (default for registry agents): the agent image runs as a short-lived Kubernetes Job / Docker container in a locked-down network namespace, egress-allowlisted, with a per-run OAuth token minted for Backline's own MCP endpoint; Backline speaks ACP over the container's stdio via the worker.
+   - **Sandboxed npx**: spawned inside the `agent` worker under a seccomp profile with `HTTPS_PROXY`/`NO_PROXY` injected (Zed's `load_proxy_env`) and **secrets injected per-agent from the vault, never inherited** (lumen's `safeChildEnv()`).
+   - **Remote**: a hosted MCP/A2A/ACP endpoint where Backline is the client with full OAuth 2.1 (protected-resource-metadata discovery, PKCE, dynamic client registration, RFC 8707 resource indicators).
+3. **Production health checking**: on install and every 15 minutes, a live handshake smoke test — connect, `initialize`, assert declared capabilities match actual, disconnect. The agoragentic `verify-acp.js` pattern **promoted from CI into production**. Failures flip the card to a red "Unhealthy" badge with captured stderr.
+4. **Approval hardening**: the Flat / Dropdown / DropdownWithPatterns variants gain domain-shaped pattern rules ("Always allow *holds at venues under 800 cap*", "Always allow *sending offers under €5,000*") persisted to `agent_scope_grant` and evaluated before the gate on later calls; keyboard `A` / `Shift+A` / `D`; and **Allow buttons are disabled until a suspicious-content warning is acknowledged when arguments contain confusable Unicode or injected-looking instructions** (Zed's `unicode_confusables.rs` gate) — non-negotiable when arguments derive from promoter emails. The Mode × Scope matrix resolves scopes `READ | SEARCH | WRITE_DRAFT | WRITE_COMMIT | MONEY | EGRESS` against modes `assisted | supervised | autonomous`, with the unit-tested invariant that **EGRESS and MONEY never resolve to ALLOW in any mode**.
+
+Tool-call cards get **domain-specific result renderers**: a proposed hold renders as a calendar diff, a proposed settlement as a line-item table with deltas highlighted, a proposed contract as a Markdown Preview pane.
+
+### 6.6 Markdown Preview — additions beyond the shared port
+
+Beyond §2.2, Solution C specifies: a `<MarkdownWorkspace>` component in `@backline/ui` composed of `<MarkdownSource>` (CodeMirror 6) and `<MarkdownPreview>` sharing a `MarkdownDocumentController`; two parse-time indices (`blockRanges` sorted for binary search, `offsetToBlock(offset)`) that every sync behavior consumes; a `comlink` Web Worker returning `{hast, blockRanges, headings, links, images, mentions}` with React reconciling against the previous tree **so unchanged blocks don't remount — which is what keeps Mermaid and Shiki blocks from flickering**; `crm://` mentions with query fragments (`crm://booking/01H4Q...?tab=settlement`, `crm://agent-run/01H9...#entry=42`) resolved batched-and-cached into chips with live status dots and hover cards, where **`@`-autocomplete queries `crm_search_records` — the same tool agents use**; Mermaid diagrams **paired with a `<details>` text alternative** (a diagram with no text alternative is a WCAG failure); a `≈70ch` max measure as a readability requirement; `Cmd/Ctrl+F` in-preview search whose matches map back to source ranges so "find in preview, edit in source" works; a print/PDF path through the same renderer **so what you review is what you send**; and **diff preview for agent edits** — when an agent proposes a rider revision or contract clause, the pane switches to a two-column or inline diff with block-level accept/reject, nothing written until accepted, acceptance being a `WRITE_COMMIT`-scoped journaled action.
+
+### 6.7 Headless surface
+
+**The UI is a client of the same API agents use. No private endpoints, no UI-only mutations.**
+
+The **canonical operation registry** is a single `defineOperation({...})` call per capability:
+
+```ts
+defineOperation({
+  id: 'crm_booking_place_hold',
+  title: 'Place hold',
+  description: '...states side effects, idempotency, and error shapes...',
+  input:  z.object({ artistId, venueId, showDate, holdLevel, expiresAt, notes }),
+  output: z.object({ bookingId, holdLevel, expiresAt, conflicts: z.array(ConflictSchema) }),
+  scope: 'WRITE_COMMIT',
+  annotations: { readOnly: false, destructive: false, idempotent: false, openWorld: false },
+  rest:     { method: 'POST', path: '/bookings/holds' },
+  a2aSkill: { id: 'booking-hold', inputModes: ['application/json'], outputModes: ['application/json'] },
+  handler: bookingService.placeHold,
+})
+```
+
+From this the build emits the Fastify route, the OpenAPI path, the MCP `registerTool` call, the A2A skill entry, the SDK method, and the CLI subcommand. A CI check asserts every operation has a description ≥ 120 characters, non-empty annotations, an id matching `^crm_[a-z_]+$`, and **that no protocol surface has drifted from the registry — the mechanism that prevents the classic failure where the MCP surface is a stale subset of the REST API.**
+
+Canonical families include `crm_search_records`, `crm_batch_upsert`, `crm_describe_schema`, `crm_move_stage`, `crm_booking_check_availability`, `crm_booking_place_hold`, `crm_booking_promote_hold`, `crm_booking_challenge`, `crm_offer_draft`, `crm_offer_send` *(EGRESS — always gated)*, `crm_contract_send_for_signature` *(EGRESS)*, `crm_settlement_draft`, `crm_settlement_approve` *(MONEY — always human)*, `crm_tour_route_check`, `crm_catalog_lookup_isrc`, `crm_catalog_register_work`, `crm_ask` (RAG Q&A), `crm_journal_read`.
+
+**REST** carries the closed search DSL compiled to parameterized SQL (**no string SQL, ever — injection is structurally impossible**), cursor pagination with `X-Total-Estimate`, error-partitioned batch endpoints with `idProperty` upsert, the journal feed with `/journal/status`, an error envelope `{errorCode, detail, traceId, hint?, retryable, retryAfterMs?}` where **every 4xx is actionable prose**, `X-Backline-Usage: requests=142/5000; tokens=88k/2m; window=day` so agents self-throttle, and `Idempotency-Key` on all mutations.
+
+**MCP** at `/mcp` is stateless by default with an opt-in stateful mode whose `EventStore` is **Postgres, not memory** — which is what makes a dropped mobile connection resumable via `Last-Event-ID`. Records are resources (`crm://venue/{id}/tech-pack`, `crm://tour/{id}/routing`) with per-variable completions; playbooks (`advance-a-show`, `reconcile-settlement`, `prospect-market`, `draft-offer`) are prompts with `Completable` arguments; `resources/subscribe` pushes `notifications/resources/updated` from journal changes; `initialize` `instructions` ship the domain rules; tool handles support `enable()/disable()/update()` so **upgrading an agent's scope grant mid-session immediately exposes new tools**; sampling requests are served by the tenant's configured model **with cost attributed to that agent's budget**.
+
+**A2A** at `/a2a` publishes Backline as an agent others delegate to, with `input_required` as the mechanism by which a delegating agent gets asked to confirm a hold date.
+
+**ACP** at `/acp` over WebSocket serves browser-resident agent clients and third-party ACP hosts. **A versioned adapter layer sits between ACP wire types and the internal `AgentSession` events** — the internal vocabulary must never be the wire vocabulary, because ACP v1 is churning.
+
+**Discovery**: `/.well-known/{agent-card.json, mcp.json, openapi.json, ai-plugin.json}`, `/llms.txt`, `/llms-full.txt`, `AGENTS.md`, a distributable `SKILL.md` (`bl skill install <host>` writes it into Claude Code / Cursor / Copilot skill dirs — **the most underrated adoption mechanism in the whole research set**), and a `crm_server_info` tool reporting version, auth status, granted scopes, and remaining budget.
+
+### 6.8 Integrations — framework first, vendors second
+
+`@backline/connectors` is a TS port of onyx's capability-interface design — **the single most reusable artifact in the research corpus for this requirement**:
+
+```ts
+interface Connector<Cfg, Ckpt>          { validate(cfg): Promise<ValidationResult> }
+interface LoadConnector<T>              { load(): AsyncGenerator<Batch<T>> }
+interface PollConnector<T>              { poll(since, until): AsyncGenerator<Batch<T>> }
+interface CheckpointedConnector<T,Ckpt> { run(ckpt: Ckpt): AsyncGenerator<T | ConnectorFailure, Ckpt> }
+interface SlimConnector                 { listIds(): AsyncGenerator<string[]> }
+interface PermSyncConnector             { externalAccess(id): Promise<ExternalAccess> }
+interface WriteConnector<T>             { push(ops: UpsertOp<T>[]): Promise<BatchResult> }  // Backline's addition
+interface OAuthConnector                { authorizeUrl(...), exchange(...), refresh(...) }
+interface EventConnector                { verify(req), toEvents(req): ChangeEvent[] }
+```
+
+Generators **yield `Document | ConnectorFailure` so one bad record never aborts a sync**; checkpoints are typed and returned so a 4-hour Salesforce backfill resumes after a deploy; `SlimConnector` ID-only passes detect remote deletions; per-record failures land in `sync_failure` with the vendor's error text preserved. A lazy-import connector registry keeps 30 connectors from bloating startup, and each ships a `connector.yml` manifest rendered by the **same card component as the Agent Registry — one registry UX, two catalogs**.
+
+**Field mapping is data**: `connector_mapping{remoteObject, localObjectTypeId, fieldMap jsonb, direction, conflictPolicy: local_wins|remote_wins|newest_wins|manual, filterExpression}`, seeded from **describe-driven introspection of both sides** so an admin picks from real field lists and an agent can propose a mapping a human approves.
+
+**Sync mechanics**: per-credential distributed lock; bidirectional conflict resolution keyed on `externalIds` + `updatedAt` + a per-field last-writer table; idempotent writes; **proactive token-bucket rate limiting per vendor because HubSpot/monday throttle on burst and reactive-429-retry alone is not enough**; a circuit breaker per credential that opens after N consecutive failures and **surfaces a red banner rather than silently stalling**.
+
+**CRM interop**: **Salesforce** via `jsforce` v3 with the **Pub/Sub API (gRPC) Change Data Capture as the primary ingestion path** and `updated()`/`deleted()` windows as fallback, JWT bearer auth (no password grants), Bulk 2.0 only (v1 is deprecated) — *custom objects work natively because Backline's own object layer is schema-driven, so a Salesforce `Booking__c` maps to a Backline `booking` without codegen*. **HubSpot** via the pinned alpha SDK wrapped so date-versioned route churn is isolated to one module, ingesting through the **webhooks-journal offset feed rather than push webhooks**. **monday.com** via `@mondaydotcomorg/api` with mandatory complexity-budget throttling, boards→object types, items→records, columns→properties, and monday's filter AST mapped onto the search DSL; the deprecated `monday-sdk-js` is used **only** client-side if Backline ships as an embedded monday board view.
+
+**Music-industry integrations that actually matter to a booking agency**: MusicBrainz (1 rps, proper User-Agent) for ISRC/ISWC cross-checking; Spotify/Apple Music for catalog verification, prospecting signals, artwork; **DDEX ERN 4.x** ingest and export for label clients; **CWR v2.2/3.0 export** to ASCAP/BMI/PRS from `work` + `work_share`, plus SoundExchange ISRC repertoire export; ticketing (Ticketmaster/AXS/Eventbrite/DICE, read-only) for settlement pre-reconciliation and "how are we tracking"; Bandsintown/Songkick push on confirmation and pull for routing intelligence; DocuSign/Dropbox Sign with hash-pinned executed PDFs; Google Workspace + Microsoft 365 two-way calendar (per-artist and per-agent ICS feeds) and email threading into `activity` — **email *sending* is EGRESS-scoped and always gated**; Xero/QuickBooks for settlement→invoice, commission accrual, and multi-currency payouts with rate snapshots at settlement time; a generic ICS/CSV itinerary connector rather than bespoke travel integrations; Slack and Twilio for escalations and day-of-show.
+
+**Agent-side**: any MCP server in the Agent Registry becomes a toolset for Backline's own agents (onyx's dual MCP posture), with **SSRF defenses ported verbatim** — Host-header denylist, private-IP/link-local blocking, and a URL-scheme allowlist blocking `s3://`/`gs://` (the IAM-credential SSRF vector) — and no credential inheritance into spawned processes.
+
+**Credentials** live in a vault (HashiCorp Vault, or Postgres `pgcrypto` envelope encryption with a KMS-held DEK in the lite profile), **never in `config jsonb`**, with every secret registering into the log scrubber at load, and per-user vs per-tenant credential modes so a sub-agent's HubSpot access uses their own OAuth grant, not the agency's.
+
+### 6.9 Accessibility and mobile
+
+**WCAG 2.2 AA, verified.** The research found no reusable a11y code anywhere in the 16 repos, so this is budgeted at **~12% of frontend engineering, not retrofitted.**
+
+Foundation: Radix for every interactive pattern with `react-aria` filling gaps (data grids, tour-routing date-range pickers); **design tokens with contrast as a build-time constraint** — a CI job runs APCA/WCAG checks over every foreground/background pairing in light, dark, and high-contrast themes and fails the build; Zed's keyboard-first action system ported, with every capability a named, remappable, palette-discoverable action (**both an accessibility win and the fastest path for power users — booking agents live in keyboards**); and a focus-management contract where every route change moves focus to `<h1>`, every dialog returns focus to its trigger, and visible focus rings are never removed.
+
+**The hard parts, named:**
+
+1. **Virtualized lists** break screen-reader context by default. Mitigations: `aria-setsize`/`aria-posinset` so "item 12 of 847" is announced, `aria-rowcount`/`aria-rowindex` on virtualized tables, scroll-into-view before focus, and **a "Show all items" escape hatch that disables virtualization below a threshold**.
+2. **Streaming agent output.** A naive `aria-live="polite"` region attached to a token stream is a **screen-reader denial-of-service**. Backline announces at sentence boundaries with a 1.5s minimum interval, offers a per-thread "Announce agent output: off / summaries / full" preference (default *summaries* — announce state transitions like "checking venue availability", not every token), and **always announces terminal events regardless of setting**.
+3. **Approval and elicitation dialogs** are the highest-stakes interactions in the product: `aria-modal`, descriptive labelling, **the full argument payload readable as text and not only as a syntax-highlighted blob**, destructive actions never focused by default, explicit confirm for MONEY/EGRESS, and generated forms using real `<label>`, `<fieldset>/<legend>`, `aria-describedby`, `aria-invalid`/`aria-errormessage`, and native `<input type="date">` (**mobile keyboards and AT date pickers beat every custom widget**).
+4. **Markdown preview** emits semantic HTML with heading-order linting on render, Mermaid paired with text alternatives, and the active-block indicator exposed as `aria-current="location"` rather than colour alone. **Scroll follows, focus does not** — unless the user activated the jump.
+5. **Data density vs touch.** The booking grid is genuinely dense. Rather than one responsive layout stretched thin, Backline ships **two compositions of the same components** — a desktop grid and a mobile card/stack with 44×44 targets, thumb-reachable primary actions, bottom sheets instead of popovers, and no hover-only information — selected by a `useLayoutDensity()` container query, **not user-agent sniffing**.
+
+**Mobile specifically** (agents live on phones in venue loading docks): RSC-rendered record pages readable before hydration; a PWA service worker giving offline read of today's shows, contacts, and advance docs with queued writes and conflict surfacing on reconnect; agent-session resumability across network drops; `prefers-reduced-motion`/`prefers-contrast`/`prefers-color-scheme` and OS text scaling to 200% **tested at 320px × 200% zoom, the WCAG 1.4.10 reflow condition**; no fixed viewport, no `user-scalable=no`.
+
+**Verification**: `@axe-core/playwright` failing CI on any serious/critical violation, Storybook `addon-a11y`, `eslint-plugin-jsx-a11y` at error level, quarterly manual audits with NVDA/Firefox and VoiceOver/Safari (macOS + iOS) plus keyboard-only and 400%-zoom passes on the ten highest-traffic flows, and **a published VPAT/ACR as a Phase 4 deliverable, because the enterprise buyers this tier targets will ask during procurement.**
+
+### 6.10 Tradeoffs — the expensive option, named costs
+
+1. **Time to first value is 4–6 months, not 4–6 weeks.** RBAC, multi-tenancy, the connector framework, the journal, and the agent registry are all foundational — they must exist before the first booking is entered, and none are visible to a user. **Solutions A and B will demo better for six months.**
+2. **Operational surface.** Postgres + Redis + S3 + Keycloak + a worker fleet + an OTel backend + a vector index, plus container sandboxing. The `lite` profile compresses this to two services, but even lite needs someone who can read a queue-depth graph. Dropping Vespa pre-concedes part of that fight; **this is still not a zero-ops product and cannot honestly claim to be.**
+3. **RAPTOR is expensive and it was simplified.** Building the tree is O(nodes) LLM summarization calls; a five-year history for 40 artists is a real bill, and incremental rebuild is net-new engineering with genuine correctness risk around dirty-path propagation. Replacing UMAP+GMM+BIC with agglomerative cosine clustering is cheaper and dependency-free but **will produce worse cluster boundaries on heterogeneous corpora**; if retrieval quality disappoints, the fix is a Python sidecar running the real algorithm — an architectural regression better admitted up front than discovered in production. Mitigation: feature-flag RAPTOR per tenant and **ship flat pgvector retrieval first**.
+4. **Three agent protocols is three maintenance burdens.** MCP is stable-ish. ACP is explicitly churning. A2A is fragmenting. **If forced to cut, cut ACP first — keep the UX, drop the wire protocol — and keep MCP + A2A.**
+5. **Persisted approvals are slower and more complex than Zed's oneshot**: orphaned pending approvals, agents timing out mid-negotiation, approvals resolved after the run died, and p99 latency on every mutating agent action measured in human minutes. Correct for contracts and settlements, actively annoying for low-stakes reads — **which is exactly why the scope matrix matters; get it wrong and the product feels like a permissions dialog with a CRM attached.**
+6. **The two-layer data model is a real cost.** Keeping a `booking` coherent as both a `record` row and a `booking` row requires discipline in every service and one very careful write path. Simpler designs pick one. Both were picked deliberately — pure property bags cannot enforce "one confirmed show per venue per date," and pure relational cannot absorb a Salesforce custom object — **but the seam is where bugs will live.**
+7. **The registry index is a dependency on someone else's CDN and schema** if the ACP community index is used. Cache-and-throttle mitigates outages, not schema changes; the curated index is the safe default and community is opt-in per tenant.
+8. **HubSpot's SDK is alpha and date-versioned**, its mock-server tests are all `test.skip`, so behaviour coverage must be built from scratch on our side.
+9. **What was not built**: no real-time collaborative editing (contracts are reviewed, not co-typed), no native mobile apps, no ticketing platform, no royalty accounting engine (splits are modeled; distribution accounting is not), no email client. Each is a plausible ask and each is a "no" for v1.
+
+**Do not pick Backline Arena if**: the customer is a single agency under ~15 seats in one territory; the buyer wants to be live in a month; there is no engineer who will own the worker fleet; agent autonomy is a "nice to have" rather than the reason for buying; or the integration requirement is really just "export to CSV." **In all of those cases the lightweight solution wins outright, and the honest move is to say so.**
+
+### 6.11 Roadmap
+
+| Phase | Weeks | Exit criterion |
+|---|---|---|
+| 0 Foundations | 1–5 | `crm_create_record` / `crm_search_records` / `crm_get_record` exist simultaneously as REST, SDK, and CLI, with a journal entry per write, in a tenant-scoped test |
+| 1 Domain | 6–13 | An agency runs a full show lifecycle — enquiry → 1st hold → challenge → confirm → offer → contract → settlement — **entirely through the UI *and* entirely through the REST API**, with a full journal trail; first axe gate on |
+| 2 Agent platform | 14–22 | A third-party MCP agent installed from the registry places a hold, is blocked at `crm_offer_send`, a human approves with an "always under €5k" pattern rule, and the whole exchange is inspectable and journaled |
+| 3 Documents & retrieval | 20–28 (overlapping) | An agent answers "summarize our history with this promoter and cite the settlements" with a drillable evidence ladder; a rider is edited with live preview and clickable checkboxes |
+| 4 Integrations & enterprise | 26–38 | Bidirectional HubSpot sync survives a chaos test (kill worker mid-batch, replay from checkpoint, **zero duplicates**); an external A2A agent completes a delegated task; published accessibility conformance report |
+| 5 Scale & sharpen | 38+ | Per-queue autoscaling, HA Postgres, cross-tenant analytics for agency groups, marketplace curation tooling — and *"whatever the first three customers actually ask for, which on the evidence of every CRM ever shipped will be report builders and email templates, not more agent protocols."* |
+
+**Two hard gates:** (a) no feature merges without its headless path, enforced by the operation-registry drift check; (b) no page merges with a serious/critical axe violation. **Both are cheap on day one and unaffordable to add in month nine.**
+
+---
+
+<!-- SECTION-7-PLACEHOLDER -->
+
 
 ## 8. Appendix — reusable pattern index
 
