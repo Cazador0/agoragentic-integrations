@@ -66,5 +66,7 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: npm, cache-dependency-path: backline/package-lock.json }
       - run: npm ci
-      - run: npx tsc --build packages/mcp
+      # Full build: emit-all reads packages/emitters/dist, which building
+      # packages/mcp alone does not produce.
+      - run: npx tsc --build
       - run: npx tsx scripts/emit-all.ts
