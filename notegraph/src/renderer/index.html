@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; style-src 'self'; script-src 'self'; img-src 'self' data:"
+    />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>notegraph</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <canvas id="graph-canvas"></canvas>
+    <section id="panel" aria-label="notegraph controls">
+      <header class="panel-header">
+        <h1>notegraph</h1>
+        <button id="open-vault" type="button">Open Vault</button>
+      </header>
+      <input
+        id="search"
+        type="search"
+        placeholder="Filter nodes…"
+        aria-label="Filter nodes"
+        autocomplete="off"
+        spellcheck="false"
+      />
+      <div class="toggles">
+        <label><input type="checkbox" id="toggle-attachments" checked /> attachments</label>
+        <label><input type="checkbox" id="toggle-unresolved" checked /> unresolved</label>
+        <label><input type="checkbox" id="toggle-tags" /> tags</label>
+        <label><input type="checkbox" id="toggle-orphans" checked /> orphans</label>
+      </div>
+      <div class="panel-row">
+        <button id="fit" type="button">Fit</button>
+      </div>
+      <p id="stats" class="stats">—</p>
+      <p id="status" class="status">starting…</p>
+    </section>
+    <script src="./app.js"></script>
+  </body>
+</html>

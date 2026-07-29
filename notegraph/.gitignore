@@ -1,0 +1,4 @@
+node_modules/
+dist/
+demo/graph-data.json
+*.tsbuildinfo

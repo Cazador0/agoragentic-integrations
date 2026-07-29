@@ -1,0 +1,30 @@
+{
+  "name": "notegraph",
+  "version": "0.1.0",
+  "description": "Local-first Markdown note-taking and graph-visualization desktop app (Obsidian-inspired architecture)",
+  "private": true,
+  "main": "dist/main/main.cjs",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "watch": "node scripts/build.mjs --watch",
+    "start": "npm run build && electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "demo:data": "node scripts/build.mjs && node dist/tools/gen_demo_data.cjs",
+    "demo": "npm run demo:data && node scripts/serve_demo.mjs"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.1",
+    "js-yaml": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "electron": "^38.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}
