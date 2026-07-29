@@ -1,0 +1,72 @@
+name: Backline
+
+on:
+  push:
+    paths: ["backline/**", ".github/workflows/backline.yml"]
+  pull_request:
+    paths: ["backline/**", ".github/workflows/backline.yml"]
+
+defaults:
+  run:
+    working-directory: backline
+
+jobs:
+  # The adoption gate runs FIRST and on its own. Email ingestion, the calendar
+  # feed and parallel-run reconciliation must work before anything else is
+  # allowed to build. See docs/GAP-CLOSURES.md section 1 — all three reviewed
+  # architectures sequenced these after the agent platform, which is how CRM
+  # rollouts die.
+  adoption-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: backline/package-lock.json }
+      - run: npm ci
+      - run: npx tsc --build
+      - run: npx vitest run evals/adoption
+
+  domain-and-services:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: backline/package-lock.json }
+      - run: npm ci
+      - run: npx tsc --build
+      - run: npx vitest run packages
+      - run: npm run verify:registry
+
+  # Schema constraints are claims until a real Postgres rejects the bad writes.
+  schema:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env: { POSTGRES_USER: backline, POSTGRES_PASSWORD: backline, POSTGRES_DB: backline }
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+        ports: ["5432:5432"]
+    steps:
+      - uses: actions/checkout@v4
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/migrations/0001_init.sql
+        env:
+          DATABASE_URL: postgres://backline:backline@localhost:5432/backline
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f packages/db/tests/constraints.sql
+        env:
+          DATABASE_URL: postgres://backline:backline@localhost:5432/backline
+
+  # The agent platform is GATED on adoption. This dependency is the whole point:
+  # you cannot merge the agent surface while the timeline is empty.
+  agent-platform:
+    needs: [adoption-gate, domain-and-services]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm, cache-dependency-path: backline/package-lock.json }
+      - run: npm ci
+      # Full build: emit-all reads packages/emitters/dist, which building
+      # packages/mcp alone does not produce.
+      - run: npx tsc --build
+      - run: npx tsx scripts/emit-all.ts

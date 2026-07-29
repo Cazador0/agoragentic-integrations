@@ -1,0 +1,12 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/domain" },
+    { "path": "packages/db" },
+    { "path": "packages/services" },
+    { "path": "packages/api" },
+    { "path": "packages/mcp" },
+    { "path": "packages/connectors" },
+    { "path": "packages/emitters" }
+  ]
+}

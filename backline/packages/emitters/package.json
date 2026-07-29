@@ -1,0 +1,10 @@
+{
+  "name": "@backline/emitters",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
+  "dependencies": { "@backline/domain": "*", "zod": "^3.24.1", "zod-to-json-schema": "^3.24.1" }
+}

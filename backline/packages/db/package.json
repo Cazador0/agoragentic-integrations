@@ -1,0 +1,10 @@
+{
+  "name": "@backline/db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
+  "dependencies": { "@backline/domain": "*", "drizzle-orm": "^0.38.3", "postgres": "^3.4.5" }
+}
