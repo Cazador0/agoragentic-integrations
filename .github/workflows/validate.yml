@@ -4,13 +4,33 @@ on:
   push:
     branches: [main]
     paths:
+      - '**/*.md'
+      - '.github/workflows/validate.yml'
       - 'integrations.json'
       - 'integrations.schema.json'
+      - '.cursor-plugin/**'
+      - '.claude-plugin/**'
+      - 'cursor/**'
+      - 'gemini-cli/**'
+      - 'claude-code/**'
+      - 'cline/**'
+      - 'gemini-extension.json'
+      - 'GEMINI.md'
+      - 'llms-install.md'
+      - 'assets/**'
       - 'acp/**'
       - 'mcp/**'
       - 'micro-ecf/**'
       - 'harness-core/**'
+      - 'sdk/**'
+      - 'coinbase-agentic-wallets/**'
+      - 'x402/**'
+      - 'zoneless/**'
       - 'scripts/**'
+      - 'docs/**'
+      - 'examples/governed-research-agent/**'
+      - 'examples/agoragentic-growth/**'
+      - 'test/**'
       - '*/README.md'
       - 'README.md'
       - 'AGENTS.md'
@@ -20,22 +40,47 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: '20'
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Validate public SDK package sources
+        run: |
+          node --test test/sdk-public-source.test.mjs
+          node --check sdk/node/index.js
+          node --check sdk/node/index.mjs
+          node --check sdk/agent-os-cli/cli.js
+          python -m compileall -q sdk/python/src/agoragentic
+          python -m pip install --upgrade build
+          python -m build sdk/python --outdir "${RUNNER_TEMP}/agoragentic-python-dist"
+          npm pack ./sdk/node --dry-run
+          npm pack ./sdk/agent-os-cli --dry-run
+
       - name: Validate MCP package
         working-directory: mcp
         run: |
-          npm ci --omit=dev
-          node --check mcp-server.js
+          npm ci
+          npm run check
+          npm test
+          npm audit --audit-level=moderate
+          npm run verify:packed-install
           npm pack --dry-run
 
       - name: Validate Micro ECF package
@@ -48,7 +93,23 @@ jobs:
       - name: Validate Harness Core package
         working-directory: harness-core
         run: |
+          npm ci
           npm test
+          npm run pack:smoke
+          npm pack --dry-run
+
+      - name: Setup Node 22 for n8n toolchain
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Validate n8n community node
+        working-directory: n8n
+        run: |
+          npm ci
+          npm run check
+          npm audit --omit=dev --audit-level=moderate
+          npm run audit:dev
           npm pack --dry-run
 
       - name: Install ajv-cli
@@ -62,6 +123,18 @@ jobs:
 
       - name: Verify integrations machine surfaces
         run: node scripts/verify-integrations-json.js
+
+      - name: Verify client-native distribution surfaces
+        run: node scripts/verify-client-distribution.mjs
+
+      - name: Verify documentation links and anchors
+        run: node scripts/verify-doc-links.mjs
+
+      - name: Test documentation link checker
+        run: node --test test/verify-doc-links.test.mjs
+
+      - name: Test governed research agent example
+        run: node --test examples/governed-research-agent/test/*.test.mjs
 
       - name: Verify Hermes Agent bridge
         run: node hermes-agent/verify-hermes-agent.mjs
@@ -107,7 +180,7 @@ jobs:
 
       - name: Check required root files exist
         run: |
-          for f in integrations.json integrations.schema.json AGENTS.md SKILL.md llms.txt llms-full.txt CITATION.cff CHANGELOG.md CONTRIBUTING.md SECURITY.md CODEOWNERS LICENSE README.md; do
+          for f in integrations.json integrations.schema.json AGENTS.md SKILL.md llms.txt llms-full.txt gemini-extension.json GEMINI.md llms-install.md CITATION.cff CHANGELOG.md CONTRIBUTING.md SECURITY.md CODEOWNERS LICENSE README.md; do
             if [ ! -f "$f" ]; then
               echo "❌ Missing required file: $f"
               exit 1
@@ -144,6 +217,15 @@ jobs:
       - name: Verify ACP adapter
         run: node scripts/verify-acp.js
 
+      - name: Verify Rust framework public sync
+        run: node scripts/verify-rust-framework-public-sync.js
+
+      - name: Test growth example validator
+        run: node --test test/validate-growth-examples.test.mjs
+
+      - name: Validate growth-generated examples
+        run: node scripts/validate-growth-examples.mjs --base origin/main
+
       - name: Summary
         run: |
           echo "=== Machine Surface Validation Complete ==="
@@ -153,3 +235,47 @@ jobs:
           echo "Root files: all present"
           echo "CITATION.cff: valid"
           echo "Tool naming: consistent"
+
+  payment-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 24 for native TypeScript contract tests
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Test payment safety contracts
+        run: node --experimental-strip-types --test test/payment-safety-contracts.test.mjs
+      - name: Test Solana payment safety contracts
+        run: node --experimental-strip-types --test test/solana-payment-safety.test.mjs
+      - name: Run Solana no-funds demo
+        run: node examples/agoragentic-growth/2026-06-21-solana-x402-paid-call-adapter-demo-mjs-c10944a6cc/solana_x402_paid_call_adapter_demo.mjs
+      - name: Test x402 buyer demo preflight behavior
+        run: node --test test/x402-buyer-demo-preflight.test.mjs
+
+  adapter-conformance:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node 24 for TypeScript syntax checks
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+      - name: Test forked conformance agent
+        run: node --test test/adapter-conformance-agent.test.mjs
+      - name: Test framework adapter contracts
+        run: node --test test/framework-adapter-contracts.test.mjs
+      - name: Validate every integration offline
+        run: node scripts/adapter-conformance-agent.mjs --jobs 4 --report "${RUNNER_TEMP}/adapter-conformance-report.json"
+      - name: Upload conformance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adapter-conformance-${{ github.sha }}
+          path: ${{ runner.temp }}/adapter-conformance-report.json
+          if-no-files-found: error
+          retention-days: 30

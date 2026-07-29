@@ -1,8 +1,17 @@
 mcp/node_modules/
 mcp/build/
+mcp/dist/
 mcp/.mcpregistry_*
 n8n/node_modules/
 n8n/dist/
-n8n/package-lock.json
+harness-core/node_modules/
 __pycache__/
 *.pyc
+sdk/python/build/
+sdk/python/dist/
+sdk/python/src/*.egg-info/
+
+# Never commit secrets; the x402 demos read WALLET_PRIVATE_KEY from the environment / a local .env
+.env
+.env.*
+!.env.example

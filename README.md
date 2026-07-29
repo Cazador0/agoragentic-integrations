@@ -1,10 +1,13 @@
-# Agoragentic
+# Agoragentic Integrations
 
-Receipt-backed public tools for agents. Discover a tool, execute it, and verify the result with a receipt.
+![Agoragentic integrations: connect agents, route work, keep receipts](./assets/agoragentic-integrations-social.png)
+
+**97 public integration surfaces for Triptych OS (Agent OS), Router execution, local governance, MCP, A2A, client-native plugins, frameworks, workflows, wallets, and receipt-aware agent commerce.**
 
 [![npm](https://img.shields.io/npm/v/agoragentic-mcp?label=MCP%20Server&color=cb3837)](https://www.npmjs.com/package/agoragentic-mcp)
 [![PyPI](https://img.shields.io/pypi/v/agoragentic?label=Python%20SDK&color=3775A9)](https://pypi.org/project/agoragentic/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Verified on MseeP](https://mseep.ai/badge.svg)](https://mseep.ai/app/rhein1-agoragentic-integrations)
 
 ## Live Tools
 
@@ -26,7 +29,7 @@ All tools return structured JSON. No API key required for direct tool calls. Mar
 curl -X POST https://agoragentic.com/api/quickstart \
   -H "Content-Type: application/json" \
   -d '{"name": "my-agent"}'
-# → { "api_key": "amk_...", "balance": "$0.50" }
+# → { "id": "agt_...", "api_key": "amk_..." }
 
 # 2. Match providers for a task
 curl "https://agoragentic.com/api/execute/match?task=weather" \
@@ -46,6 +49,22 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 # → { "receipt_id": "rcpt_...", "settlement": "settled", "cost": 0 }
 ```
 
+## Agoragentic family
+
+| Repo / package | What it is |
+|---|---|
+| **[agoragentic-integrations](https://github.com/rhein1/agoragentic-integrations)** | 97 indexed surfaces across client plugins, frameworks, protocols, wallets, workflows, local providers, SDKs, and MCP |
+| [agoragentic-ecf-core](https://github.com/rhein1/agoragentic-ecf-core) | Self-hosted context-governance runtime (npm `agoragentic-ecf-core`) |
+| [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) | Open local context wedge (npm `agoragentic-micro-ecf`) |
+| [agoragentic-premortem-golden-loop](https://github.com/rhein1/agoragentic-premortem-golden-loop) | Pre-launch release-readiness CLI (npm `agoragentic-premortem-golden-loop`) |
+| [fable5-codex](https://github.com/rhein1/fable5-codex) | Evidence-first Codex audits, reviews, fact checks, and repo sweeps |
+| [agoragentic-summarizer-agent](https://github.com/rhein1/agoragentic-summarizer-agent) | Python example: route `summarize` via `execute()` |
+| [agoragentic-openai-agents-example](https://github.com/rhein1/agoragentic-openai-agents-example) | OpenAI Agents SDK marketplace example |
+
+Home: **[agoragentic.com/developers](https://agoragentic.com/developers/)** · full index: [`integrations.json`](./integrations.json)
+
+Agent workflow contracts: [governed agent runs](./docs/agent-workflow-contracts.md) and [Fable review output](./docs/fable-review-contract.md).
+
 ## Discovery Surfaces
 
 | Surface | URL |
@@ -57,28 +76,53 @@ curl "https://agoragentic.com/api/commerce/receipts/rcpt_YOUR_RECEIPT" \
 | x402 service card | [/.well-known/x402/service.json](https://agoragentic.com/.well-known/x402/service.json) |
 | OpenAPI spec | [/openapi.yaml](https://agoragentic.com/openapi.yaml) |
 | LLM instructions | [/llms.txt](https://agoragentic.com/llms.txt) |
-| Proof script | [`scripts/execute-path-proof.mjs`](https://github.com/rhein1/agent-marketplace) (private repo — run `node scripts/execute-path-proof.mjs https://agoragentic.com`) |
+| Client distribution status | [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) |
+| Offline machine-surface check | `node scripts/verify-integrations-json.js` |
+| Offline adapter conformance | `node scripts/adapter-conformance-agent.mjs` |
 
 ## What Agoragentic Does
 
 - Route tasks to tools with `execute(task, input)` — the router picks the provider
 - Preview available providers with `match(task)`
 - Get receipts for every execution with provider, cost, and settlement status
-- Call x402 pay-per-request services with USDC on Base L2
+- Call x402 pay-per-request services with USDC on Base L2 when live discovery marks a paid route available
 - Plug into MCP, OpenAI Agents, LangChain, CrewAI, AutoGen, smolagents, and more
 - Deploy governed agents through Agent OS with budgets, approvals, and policy
 
-## Start Here
+## Start Here — choose one path
 
-Do this before you pick a framework adapter:
+| I want to... | Start with | What happens next |
+|---|---|---|
+| **Integrate an existing agent or framework** | Pick a ready adapter from [Featured Integration Paths](#featured-integration-paths), then follow the [5-Minute Buyer Quickstart](#5-minute-buyer-quickstart). | Use `match()` to preview and `execute()` to route work; inspect the resulting receipt. Use the [x402 buyer example](./x402/README.md) only when a direct paid-edge flow is the right fit. |
+| **Govern an agent locally before any hosted step** | [Micro ECF](https://github.com/rhein1/agoragentic-micro-ecf) for local policy, source maps, approvals, and Harness exports. | Use [ECF Core](https://github.com/rhein1/agoragentic-ecf-core) only when the local artifact workflow is no longer enough and you need a self-hosted context-governance runtime. |
+| **Preview or deploy a governed agent** | [Agent OS control-plane examples](./agent-os/README.md). | Start with no-spend readiness and preview. A deployment request, funding, public exposure, marketplace selling, and x402 monetization are separate approval-gated steps. |
 
-1. `POST /api/quickstart`
-2. `POST /api/execute` with task `echo`
-3. optionally `GET /api/execute/match?task=...`
-4. `POST /api/execute` for real routed work
-5. `GET /api/execute/status/{invocation_id}` or `GET /api/commerce/receipts/{receipt_id}`
+New integrations should follow the [adapter template kit](./templates/adapter/README.md), not copy a legacy adapter blindly. Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you intentionally need a specific provider.
 
-Do **not** start with `GET /api/capabilities` or `POST /api/invoke/{listing_id}` unless you are intentionally choosing a specific provider.
+Continue with the [ecosystem walkthroughs](./docs/ECOSYSTEM_WALKTHROUGHS.md), [glossary](./docs/GLOSSARY.md), or [troubleshooting guide](./docs/TROUBLESHOOTING.md).
+
+## Offline Adapter Conformance
+
+Run the repository-owned QA agent before submitting an adapter:
+
+```bash
+node scripts/adapter-conformance-agent.mjs --adapter your-integration-id
+node scripts/adapter-conformance-agent.mjs --jobs 4 --report ./adapter-conformance-report.json
+```
+
+The coordinator forks an isolated worker for each selected manifest entry. Workers receive a sanitized environment and parse source without importing or executing adapter code. The report covers repository containment, syntax, credential-shaped literals, execute-first signals, and colocated test presence.
+
+This is honest offline evidence, not a live-runtime or settlement claim: it performs no network calls, paid calls, wallet actions, or production mutation. See the [Adapter Conformance Agent contract](./docs/ADAPTER_CONFORMANCE_AGENT.md).
+
+## Help Test An Integration
+
+We are collecting independent, no-spend runtime reports for the ready MCP, Claude Code, Gemini CLI, LangChain, CrewAI, AutoGen, OpenAI Agents SDK, and Google ADK paths.
+
+1. Run the repository-owned offline conformance check for one adapter.
+2. Optionally follow that adapter's README and exercise a free `echo` route after confirming the matched provider costs `0`.
+3. Submit a structured [integration test report](https://github.com/rhein1/agoragentic-integrations/discussions/new?category=show-and-tell).
+
+Never paste API keys, wallet material, authorization headers, cookies, or unredacted environment output. Stop before any payment challenge or nonzero quote. The [community testing guide](./docs/COMMUNITY_TESTING.md) defines the commands, evidence boundary, initial test cohort, and public compatibility matrix.
 
 ## What Your Agent Gets
 
@@ -92,28 +136,48 @@ Use this chooser before picking a framework wrapper:
 
 | If you need to... | Use | Layer |
 |---------|---------|-------------|
-| Call Router / Marketplace from a JavaScript agent or app | `npm install agoragentic` | SDK and `execute()` client |
-| Run no-spend Agent OS readiness, preview, and deploy-request checks | `npx agoragentic-os@latest` | Triptych OS (Agent OS) CLI |
+| Call Router / Marketplace from a JavaScript agent or app | [`npm install agoragentic`](./sdk/node/) | SDK and `execute()` client |
+| Call Router / Marketplace from Python | [`pip install agoragentic`](./sdk/python/) | Python SDK and `execute()` client |
+| Run no-spend Agent OS readiness, preview, and deploy-request checks | [`npx agoragentic-os@latest`](./sdk/agent-os-cli/) | Triptych OS (Agent OS) CLI |
 | Call a self-hosted Rust framework runtime from TypeScript or Python | `AGORAGENTIC_RUST_AGENT_URL=http://127.0.0.1:8080` plus `rust-framework/` examples | HTTP/JSON runtime contract |
 | Expose Agoragentic tools inside MCP-native hosts | `npx agoragentic-mcp@latest` | MCP stdio relay |
 | Prepare local context, policy, source maps, and Harness exports before hosted deployment | `npx agoragentic-micro-ecf@latest` | Micro ECF local wedge |
-| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `node harness-core/bin/agoragentic-harness.mjs` | Harness Core source scaffold |
-| Run a local release premortem and safe self-heal plan before publishing an OSS agent | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
-| Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | `npx agoragentic-ecf-core@latest` | ECF Core |
+| Build no-spend local proof, receipt, Agent OS export, and listing-readiness artifacts | `npx agoragentic-harness-core@latest` (or `node harness-core/bin/agoragentic-harness.mjs`) | Harness Core (npm currently serves v0.1.1; this repository contains the review-gated v0.2.0 candidate) |
+| Run a local release premortem and safe self-heal plan before publishing an OSS agent | [`agoragentic-premortem-golden-loop`](https://github.com/rhein1/agoragentic-premortem-golden-loop) · `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | Premortem Golden Loop source scaffold |
+| Run a self-hosted context-governance compiler without hosted wallets or marketplace execution | [`agoragentic-ecf-core`](https://github.com/rhein1/agoragentic-ecf-core) · `npx agoragentic-ecf-core@latest` | ECF Core |
 | Add quote, x402, execute, and receipt steps to n8n workflows | `npm install n8n-nodes-agoragentic` | n8n community node |
 
 The hosted Triptych OS (Agent OS) control plane is not a downloadable npm package. Self-hosted agents use these packages to prepare context, build Harness packets, or call hosted Agoragentic APIs over HTTPS.
 
 | Package | Install | Min Runtime |
 |---------|---------|-------------|
-| **Node.js SDK** | `npm install agoragentic` | Node ≥ 16 |
-| **Python SDK** | `pip install agoragentic` | Python ≥ 3.8 |
+| **[Node.js SDK source](./sdk/node/)** | `npm install agoragentic` | Node ≥ 16 |
+| **[Python SDK source](./sdk/python/)** | `pip install agoragentic` | Python ≥ 3.8 |
+| **[Agent OS CLI source](./sdk/agent-os-cli/)** | `npx agoragentic-os@latest` | Node ≥ 18 |
 | **MCP Server** | `npx agoragentic-mcp` | Node ≥ 18 |
 | **ACP Adapter** | `npx agoragentic-mcp --acp` | Node ≥ 18 |
 | **Micro ECF** | `npx agoragentic-micro-ecf@latest init` | Node ≥ 18 |
+| **Harness Core** | `npx agoragentic-harness-core@latest init` | Node ≥ 18 |
 | **Premortem Golden Loop Agent** | `node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .` | Node ≥ 18 |
 
-## Available Integrations
+> Premortem ships as npm `agoragentic-premortem-golden-loop` (v0.1.6); the standalone repo is canonical, this `premortem-golden-loop/` folder is a vendored copy.
+
+## Client-Native Installs
+
+These packages reuse the published MCP relay and default to no embedded API key. Package readiness is separate from external marketplace approval.
+
+| Client | Install | Listing state |
+|---|---|---|
+| [Cursor](./cursor/README.md) | Clone into `~/.cursor/plugins/local/agoragentic` | Local package ready; publisher submission pending |
+| [Gemini CLI](./gemini-cli/README.md) | `gemini extensions install https://github.com/rhein1/agoragentic-integrations` | Direct install ready; gallery discovery follows the GitHub topic |
+| [Claude Code](./claude-code/README.md) | `/plugin marketplace add rhein1/agoragentic-integrations` | Self-hosted community marketplace ready |
+| [Cline](./cline/README.md) | Add `npx -y agoragentic-mcp@1.3.6` as an MCP server | Submission packet ready; Cline review pending |
+
+The canonical descriptions, assets, package coordinate, authority boundary, and per-channel statuses live in [`docs/catalog-profile.json`](./docs/catalog-profile.json). Tool inventory is live and authentication-dependent; directory copy must not publish a static tool count.
+
+## Featured Integration Paths
+
+The table below highlights useful entry points. The complete canonical inventory contains **97** surfaces in [`integrations.json`](./integrations.json), including client plugins, framework adapters, protocols, wallets, workflow tools, local providers, and reference integrations.
 
 | Framework | Language | Status | Path | Docs |
 |-----------|----------|--------|------|------|
@@ -129,22 +193,36 @@ The hosted Triptych OS (Agent OS) control plane is not a downloadable npm packag
 | [**n8n Community Node**](n8n/) | Typescript | Beta | `n8n/nodes/Agoragentic/Agoragentic.node.ts` | [README](n8n/README.md) |
 | [**Open Wallet Standard**](ows/) | Javascript | Beta | `ows/example-node.mjs` | [README](ows/README.md) |
 | [**x402 Buyer Integration**](x402/) | Javascript | ✅ Ready | `x402/buyer-demo.js` | [README](x402/README.md) |
+| [**Agent Commerce Interchange Builder Package**](interchange/) | Javascript | Experimental | `interchange/README.md` | [README](interchange/README.md) |
 | [**Micro ECF**](micro-ecf/) | Javascript | Beta | `micro-ecf/bin/micro-ecf.mjs` | [README](micro-ecf/README.md) |
 | [**Agoragentic Harness Core**](harness-core/) | Javascript | Beta | `harness-core/bin/agoragentic-harness.mjs` | [README](harness-core/README.md) |
 | [**Premortem Golden Loop Agent**](premortem-golden-loop/) | Javascript | Beta | `premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs` | [README](premortem-golden-loop/README.md) |
+| [**Langflow**](langflow/) | Python | Experimental | `langflow/README.md` | [README](langflow/README.md) |
+| [**Browser Use**](browser-use/) | Python | Experimental | `browser-use/README.md` | [README](browser-use/README.md) |
+| [**DSPy**](dspy/) | Python | Experimental | `dspy/README.md` | [README](dspy/README.md) |
+| [**AgentScope**](agentscope/) | Python | Experimental | `agentscope/README.md` | [README](agentscope/README.md) |
+| [**VoltAgent**](voltagent/) | Typescript | Experimental | `voltagent/README.md` | [README](voltagent/README.md) |
+| [**Genkit**](genkit/) | Typescript | Experimental | `genkit/README.md` | [README](genkit/README.md) |
 | [**LangChain**](langchain/) | Python | ✅ Ready | `langchain/agoragentic_tools.py` | [README](langchain/README.md) |
 | [**CrewAI**](crewai/) | Python | ✅ Ready | `crewai/agoragentic_crewai.py` | [README](crewai/README.md) |
 | [**MCP (Claude, VS Code, Cursor)**](mcp/) | Javascript | ✅ Ready | `mcp/mcp-server.js` | [README](mcp/README.md) |
+| [**Cursor Plugin**](cursor/) | Json | Beta | `.cursor-plugin/plugin.json` | [README](cursor/README.md) |
+| [**Gemini CLI Extension**](gemini-cli/) | Json | ✅ Ready | `gemini-extension.json` | [README](gemini-cli/README.md) |
+| [**Claude Code Plugin**](claude-code/) | Json | ✅ Ready | `.claude-plugin/marketplace.json` | [README](claude-code/README.md) |
+| [**Cline MCP Package**](cline/) | Json | Beta | `llms-install.md` | [README](cline/README.md) |
 | [**Agent Client Protocol**](acp/) | Javascript | ✅ Ready | `acp/agent.json` | [README](acp/README.md) |
 | [**AutoGen (Microsoft)**](autogen/) | Python | ✅ Ready | `autogen/agoragentic_autogen.py` | [README](autogen/README.md) |
 | [**OpenAI Agents SDK**](openai-agents/) | Python | ✅ Ready | `openai-agents/agoragentic_openai.py` | [README](openai-agents/README.md) |
-| [**ElizaOS (ai16z)**](elizaos/) | Typescript | ✅ Ready | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
+| [**ElizaOS (ai16z)**](elizaos/) | Typescript | Source-only (not on npm) | `elizaos/agoragentic_eliza.ts` | [README](elizaos/README.md) |
 | [**Google ADK**](google-adk/) | Python | ✅ Ready | `google-adk/agoragentic_google_adk.py` | [README](google-adk/README.md) |
 | [**Vercel AI SDK**](vercel-ai/) | Javascript | ✅ Ready | `vercel-ai/agoragentic_vercel.js` | [README](vercel-ai/README.md) |
 | [**Mastra**](mastra/) | Javascript | ✅ Ready | `mastra/agoragentic_mastra.js` | [README](mastra/README.md) |
 | [**pydantic-ai**](pydantic-ai/) | Python | ✅ Ready | `pydantic-ai/agoragentic_pydantic.py` | [README](pydantic-ai/README.md) |
 | [**smolagents (HuggingFace)**](smolagents/) | Python | ✅ Ready | `smolagents/agoragentic_smolagents.py` | [README](smolagents/README.md) |
 | [**Agno (Phidata)**](agno/) | Python | ✅ Ready | `agno/agoragentic_agno.py` | [README](agno/README.md) |
+| [**Griptape**](griptape/) | Python | Beta | `griptape/agoragentic_griptape.py` | [README](griptape/README.md) |
+| [**LiveKit Agents**](livekit-agents/) | Python | Beta | `livekit-agents/agoragentic_livekit.py` | [README](livekit-agents/README.md) |
+| [**Pipecat**](pipecat/) | Python | Beta | `pipecat/agoragentic_pipecat.py` | [README](pipecat/README.md) |
 | [**MetaGPT**](metagpt/) | Python | ✅ Ready | `metagpt/agoragentic_metagpt.py` | [README](metagpt/README.md) |
 | [**LlamaIndex**](llamaindex/) | Python | ✅ Ready | `llamaindex/agoragentic_llamaindex.py` | [README](llamaindex/README.md) |
 | [**AutoGPT**](autogpt/) | Python | ✅ Ready | `autogpt/agoragentic_autogpt.py` | [README](autogpt/README.md) |
@@ -267,7 +345,7 @@ Hosted docs:
 
 ## Micro ECF To Agent OS
 
-Micro ECF is the local context wedge for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization.
+Micro ECF is the local context wedge for preparing an agent before it gets hosted spend, public API exposure, marketplace seller exposure, or x402 monetization. The canonical package and documentation live at [rhein1/agoragentic-micro-ecf](https://github.com/rhein1/agoragentic-micro-ecf); the `micro-ecf/` folder here is a compatibility snapshot.
 
 Micro ECF is the local context wedge. Agent OS is the deployment product. Full ECF is the private enterprise runtime engine.
 
@@ -358,9 +436,23 @@ Your Agent  →  Integration (tools/MCP)  →  Agent OS + Agoragentic API
 |-------|------|
 | Machine-readable index | [`integrations.json`](./integrations.json) |
 | JSON Schema | [`integrations.schema.json`](./integrations.schema.json) |
+| Client distribution status | [`docs/DISTRIBUTION.md`](./docs/DISTRIBUTION.md) |
+| Canonical directory packet | [`docs/catalog-profile.json`](./docs/catalog-profile.json) |
+| Cursor plugin | [`.cursor-plugin/plugin.json`](./.cursor-plugin/plugin.json) |
+| Gemini CLI extension | [`gemini-extension.json`](./gemini-extension.json) |
+| Claude Code marketplace | [`.claude-plugin/marketplace.json`](./.claude-plugin/marketplace.json) |
+| Cline install guide | [`llms-install.md`](./llms-install.md) |
+| Ecosystem walkthroughs | [`docs/ECOSYSTEM_WALKTHROUGHS.md`](./docs/ECOSYSTEM_WALKTHROUGHS.md) |
+| Glossary and maturity labels | [`docs/GLOSSARY.md`](./docs/GLOSSARY.md) |
+| Troubleshooting | [`docs/TROUBLESHOOTING.md`](./docs/TROUBLESHOOTING.md) |
+| Community testing and independent evidence | [`docs/COMMUNITY_TESTING.md`](./docs/COMMUNITY_TESTING.md) |
 | Agent instructions | [`AGENTS.md`](./AGENTS.md) |
+| Public SDK package sources | [`sdk/README.md`](./sdk/README.md) |
 | ACP registry positioning | [`ACP_REGISTRY.md`](./ACP_REGISTRY.md) |
 | Agent Client Protocol adapter | [`acp/agent.json`](./acp/agent.json) |
+| Agent Commerce Interchange builder package | [`interchange/README.md`](./interchange/README.md) |
+| Agent Commerce Interchange spec | [`interchange/SPEC.md`](./interchange/SPEC.md) |
+| Agent Commerce Interchange status | [`interchange/STATUS.md`](./interchange/STATUS.md) |
 | LLM bootstrap | [`llms.txt`](./llms.txt) |
 | LLM full context | [`llms-full.txt`](./llms-full.txt) |
 | Capability description | [`SKILL.md`](./SKILL.md) |
@@ -449,7 +541,7 @@ File: `~/.codeium/windsurf/mcp_config.json`
 
 ## Contributing
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md). New framework adapters welcome — one folder, one README, matching tool names.
+See [CONTRIBUTING.md](./CONTRIBUTING.md). New framework adapters should begin with the [adapter template kit](./templates/adapter/README.md), then add one framework folder, one README, and matching tool names.
 
 ## Security
 
@@ -457,4 +549,4 @@ See [SECURITY.md](./SECURITY.md). Report vulnerabilities to `security@agoragenti
 
 ## License
 
-[MIT](./LICENSE), except `micro-ecf/` which carries its own Apache-2.0 package license.
+[MIT](./LICENSE), except `micro-ecf/` and `harness-core/`, which carry their own Apache-2.0 package licenses.

@@ -5,16 +5,67 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - 2026-05-19
+## [Unreleased]
+
+### Added
+- Added client-native packages for Cursor, Gemini CLI, Claude Code, and Cline, all using the published MCP relay without embedding an API key.
+- Added a canonical distribution packet, external-channel status matrix, 400 by 400 plugin icon, and repository-owned validation for package metadata and no-spend boundaries.
+- Added the Harness Core 0.2.0 public-source candidate: middleware lifecycle, append-only run ledgers, local approvals and maker-checker review records, profiles, loopback runtime probes, refs-only context imports, owner inbox/status, schedule intent, worktree-session evidence, all public schemas, and framework-wrapping examples.
+- Added experimental documentation paths for Langflow, Browser Use, DSPy, AgentScope, VoltAgent, and Genkit. These entries do not claim tested package or runtime support.
+- Added beta, framework-native adapters for Griptape, LiveKit Agents, and Pipecat with hermetic contract tests and current-framework construction evidence.
+- Added a status-safe 1280x640 integrations banner and first-viewport discovery copy.
+
+### Changed
+- Superseded `agoragentic-mcp@1.3.5` with `1.3.6` after a clean downstream install proved npm does not propagate dependency-level overrides. The 1.3.6 package bundles the audited MCP SDK/Hono tree into a Node.js 20 CLI with zero runtime dependencies and adds a packed-consumer install, audit, and MCP fallback smoke gate; all client-native manifests and MCP registry metadata now target the corrected package.
+- Bumped the canonical manifest to `2.29.0` with 97 indexed surfaces and added machine discovery pointers for the native client packages.
+- Replaced the stale quickstart free-balance example with the bounded API-key response shape and synchronized the social banner count.
+- Recorded the current OpenAI public-plugin policy blocker instead of presenting the commerce MCP surface as submission-ready.
+- Prepared the `n8n-nodes-agoragentic` 0.1.3 candidate on stable `@n8n/node-cli` 0.40.3 with a committed lockfile, lint/build prepublish gate, exact release-tag validation, and locked CI installs; npm publication remains review- and trusted-publishing-gated.
+- Bumped the canonical manifest to `2.28.0`, added Harness Core package coordinates plus its npm-first install command, and made the package-index schema enumerate every currently declared package family.
+- Hardened Harness Core publication with a lockfile, exact version-tag validation, locked installs, and an out-of-repository packed-install/schema-export smoke test. npm publication remains gated on review, merge, the exact `harness-core-v0.2.0` release, and trusted publishing.
+- Bumped the canonical manifest to `2.27.0` with 93 indexed integration surfaces.
+- Restored 13 existing adapter directories that were missing from `integrations.json`: Dfns, fast-agent, Goose, Haystack, Kibble, LI.FI, MPPScan, Olas, Reown, Safe, Superfluid, Tempo MPP, and u402.
+- Updated Agent OS CLI discovery from the stale `1.6.8` pin to `@latest` (currently published as `1.6.9`).
+- Published `agoragentic-mcp@1.3.4`, synchronized Glama, and prepared official MCP Registry server record `2.1.3` with the published npm package coordinate.
+- Corrected Harness Core publication, Micro ECF canonical-repository, skill URL, paid-price-floor, and live-availability wording across machine-readable discovery.
+- Renamed the README table to `Featured Integration Paths`; `integrations.json` is the complete inventory.
+- Hardened `agoragentic-mcp@1.3.4` with a lockfile-only install, exact release-tag gate, hermetic keyless-preview tests, package-source metadata, and a high/critical npm audit gate. The known upstream moderate static-file advisory remains documented and is not exercised by the stdio relay.
+
+## [manifest 2.16.0–2.24.2] - 2026-07-03
+
+### Added
+- Rolled up the integration-manifest bumps that shipped since `2.15.0`. `integrations.json` is now version `2.24.2` (`updated_at` 2026-07-03). This range covers the discovery/index entries added across many pushes, including but not limited to the `pdf-mcp/` (PDF MCP) and `turbovec/` (TurboVec) integrations, which are present in `integrations.json` and as directories but were previously absent from this changelog.
+- Expanded the Interchange protocol package discovery pointers in `integrations.json`.
+
+### Changed
+- CHANGELOG version headers from here forward track the integration-manifest version so the manifest and changelog no longer drift silently. Because the manifest version bumps on nearly every push, this entry is phrased as a version range rather than a single hardcoded number.
+
+### Removed
+- Removed the Frontier AI hosted-deployment link from `README.md` (originally added in 2.1.0), reconciling the earlier "Added" entry with the current README, which no longer contains it.
+
+## [micro-ecf-v0.1.3] - 2026-06-14
+
+### Changed
+- Updated the Micro ECF npm README launch path so the local install command, one-step secret-block proof, and Agent OS handoff boundary are visible from the package page.
+
+## [harness-core-v0.1.0] - 2026-06-04
+
+### Added
+- Added `harness-core/`, the package-ready local no-spend Harness Core scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter discovery.
+- Added Harness Core schemas, tests, and a Trusted Publishing release workflow gated by `harness-core-v*` release tags.
+
+## [premortem-golden-loop-v0.1.6] - 2026-05-24
+
+### Added
+- Added `premortem-golden-loop/`, a free local OSS agent release premortem, no-spend Golden Loop readiness, and safe self-heal scaffold CLI.
+- Added Premortem Golden Loop discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md`.
+
+## [2.15.0] - 2026-05-19
 
 ### Added
 - Added `hermes-agent/`, a public Hermes Agent bridge scaffold for Agoragentic MCP tooling, Agent OS handoff manifests, and review-gated self-improvement reflection packets with no live execution authority.
 - Added `rust-framework/`, a public Agoragentic Rust Framework HTTP runtime integration folder with TypeScript/Node and Python examples, a self-hosted Agent OS Harness packet example, and no-spend verification.
 - Added Rust Framework discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md` while keeping hosted Router / Marketplace SDK semantics unchanged.
-- Added `harness-core/`, the package-ready local no-spend Harness Core scaffold for `init`, `validate`, `proof`, `export --to agent-os`, `listing check`, and adapter discovery.
-- Added Harness Core schemas, tests, and a Trusted Publishing release workflow gated by `harness-core-v*` release tags.
-- Added `premortem-golden-loop/`, a free local OSS agent release premortem, no-spend Golden Loop readiness, and safe self-heal scaffold CLI.
-- Added Premortem Golden Loop discovery pointers in `integrations.json`, `README.md`, `llms.txt`, `llms-full.txt`, and `SKILL.md`.
 - Added high-priority adapters for LangGraph, Cloudflare Agents, Microsoft Semantic Kernel, Zapier MCP, Flowise, Composio, and HumanLayer.
 - Added an experimental Zoneless payout reference as documentation-only research while keeping Base settlement canonical.
 - Folded the integration manifest to version `2.15.0` with all public integration surfaces indexed.
@@ -23,7 +74,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - Hardened `agoragentic-mcp` registry builds by committing a package lockfile, adding npm retry defaults, validating the MCP package in CI, and treating registry placeholder API keys as anonymous sessions instead of forwarding invalid bearer tokens.
 - Synced the README integration table with all entries in `integrations.json`.
-- Added npm repository, homepage, bugs, and public publish metadata for `agoragentic-micro-ecf` `0.1.2`.
+- Added npm repository, homepage, bugs, and public publish metadata for `agoragentic-micro-ecf`.
 - Added Micro ECF package tests, syntax checks, and npm pack dry-run to the machine-surface validation workflow.
 
 ## [2.6.2] - 2026-04-23
@@ -92,7 +143,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Per-seller duplicate listing name prevention (409 block) in capabilities API
 - Cross-seller name collision warnings (non-blocking) in capabilities API
 - Admin duplicate listing report endpoint (`GET /api/admin/listings/duplicates`)
-- Fronteir AI hosted deployment link in README (community PR #3 by @ElishaKay)
+- Frontier AI hosted deployment link in README (community PR #3 by @ElishaKay). _(Later removed — see the manifest 2.16.0–2.24.2 rollup; the link no longer appears in README.md.)_
 
 ### Changed
 - x402 execute validation error now includes step-by-step two-step flow guide and direct invoke alternative
@@ -139,7 +190,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - SKILL.md capability description
 - Glama registry entry
 
-[2.2.0]: https://github.com/rhein1/agoragentic-integrations/compare/v2.1.0...v2.2.0
-[2.1.0]: https://github.com/rhein1/agoragentic-integrations/compare/v2.0.0...v2.1.0
-[2.0.0]: https://github.com/rhein1/agoragentic-integrations/compare/v1.0.0...v2.0.0
-[1.0.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v1.0.0
+<!--
+  Only two `vX` tags exist on the remote today: v1.1.0 and v2.1.0. Earlier footer
+  links pointed at v1.0.0 / v2.0.0 / v2.2.0, which are not tagged and returned 404.
+  Until annotated tags are cut for the remaining releases (see PR "Owner follow-ups"),
+  version links point only at refs that resolve: the two real tags, and the main tree.
+-->
+[Unreleased]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[manifest 2.16.0–2.24.2]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[micro-ecf-v0.1.3]: https://github.com/rhein1/agoragentic-integrations/releases/tag/micro-ecf-v0.1.3
+[harness-core-v0.1.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[premortem-golden-loop-v0.1.6]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.15.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.6.2]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.5.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.4.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.3.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.2.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[2.1.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v2.1.0
+[2.0.0]: https://github.com/rhein1/agoragentic-integrations/tree/main
+[1.0.0]: https://github.com/rhein1/agoragentic-integrations/releases/tag/v1.1.0

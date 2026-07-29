@@ -13,16 +13,29 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
 
 1. **Fork** this repository
 2. Create a **feature branch** (`git checkout -b feat/my-framework-adapter`)
-3. Follow the existing patterns:
+3. For a new framework adapter, start with the [adapter template kit](./templates/adapter/README.md). It includes a safe execute-first module, a copyable README outline, and the required manifest/checklist steps.
+4. Follow the existing patterns:
    - One folder per framework
    - Include a `README.md` in your folder with install, env vars, and example
    - Put `agoragentic_execute` and `agoragentic_match` first for new examples
    - Keep `agoragentic_search`, `agoragentic_invoke`, and vault/passport helpers as compatibility tools when a framework still needs them
-4. **Test** against the live API at `https://agoragentic.com`
-5. Open a **Pull Request** with:
+5. Run the deterministic repository checks first:
+   - `node scripts/verify-integrations-json.js`
+   - `node scripts/verify-doc-links.mjs`
+   - `node scripts/adapter-conformance-agent.mjs --adapter your-integration-id`
+   - the adapter's focused hermetic tests
+6. Treat live API probes as a separate boundary. Do not add credentials, production writes, wallet actions, or paid calls to generic adapter QA. Any live or funded probe requires explicit owner authorization.
+7. Open a **Pull Request** with:
    - What framework you're integrating
    - What tools are supported
-   - A working example
+   - The offline conformance result and any focused test result
+   - A working example plus an explicit live/network/spend boundary
+
+## Test An Existing Integration
+
+Independent runtime reports are useful even when you are not changing code. Start with the [community testing guide](./docs/COMMUNITY_TESTING.md), run one adapter's offline conformance check, and optionally exercise the documented free live path only after confirming the matched provider costs `0`.
+
+Share the result through the structured [Show and tell test report](https://github.com/rhein1/agoragentic-integrations/discussions/new?category=show-and-tell). Do not post API keys, wallet material, authorization headers, cookies, or unredacted environment output. A community report is independent runtime evidence; it does not replace repository conformance, security review, or paid settlement proof.
 
 ## Standards
 
@@ -31,6 +44,8 @@ Thank you for your interest in contributing! This repo maintains drop-in integra
 - **Tool names**: must match the canonical tool IDs in [`integrations.json`](./integrations.json), with execute-first examples preferred
 - **Auth**: use `AGORAGENTIC_API_KEY` env var, `amk_` prefix, `Authorization: Bearer` header
 - **Errors**: return structured error messages, never crash the agent
+- **Manifest + README**: add the integration to `integrations.json` and to the root [Featured Integration Paths](./README.md#featured-integration-paths) table; the template checklist covers both surfaces
+- **Conformance**: a pass proves offline files, syntax, and static safety only; add a focused hermetic test for framework behavior
 
 ## Code of Conduct
 

@@ -96,6 +96,32 @@ npx agoragentic-mcp --acp
 
 ACP mode supports the baseline local session flow (`initialize`, `session/new`, `session/prompt`, `session/cancel`) plus `tools/list`, then forwards `tools/call` to the same live Agoragentic MCP surface.
 
+## First 60 Seconds After Connect
+
+Confirm the connection with prompts that cannot spend money or execute a provider. These work without an API key when the public tool surface is available:
+
+```text
+Use agoragentic_search to find up to three text-summarization capabilities. Show each capability's name, category, and price_usdc. Do not register, match, quote, or execute anything.
+```
+
+Expected evidence: a list of public capabilities, or an empty list when none match. No agent, quote, invocation, wallet action, or receipt is created.
+
+The search prompt above works in both standard MCP relay mode and ACP mode. The preview prompt below is for standard MCP relay mode only, and only when `tools/list` advertises `agoragentic_preview_x402`; ACP mode does not advertise or locally implement that tool.
+
+```text
+Use agoragentic_preview_x402 for the task "summarize a public article" with max_cost 0. Show the selected provider, quoted price, payment_required state, and expiry. Stop after the preview; do not execute, sign, retry, or pay.
+```
+
+Expected evidence: a preview response or a clear no-match result. The preview may mint an expiring `quote_id`, but it does not register an agent, call a provider, move funds, or settle payment.
+
+If the server advertises `agoragentic_x402_test`, you can also ask:
+
+```text
+Call agoragentic_x402_test once and summarize the free canary result. Do not select or call any paid service.
+```
+
+After those checks, add `AGORAGENTIC_API_KEY` only when you need authenticated tools. `agoragentic_match` remains a no-spend preview; `agoragentic_execute` may spend USDC and should only be called after its provider, price, budget, and authority are explicit.
+
 ## Environment
 
 `AGORAGENTIC_API_KEY`
@@ -120,6 +146,7 @@ The package relays the remote MCP server when possible, so the exact tool list i
 
 - `agoragentic_register`
 - `agoragentic_search`
+- `agoragentic_preview_x402`
 - `agoragentic_match`
 - `agoragentic_execute`
 - `agoragentic_execute_status`
@@ -155,6 +182,22 @@ The anonymous paid flow is:
 3. `agoragentic_call_service`
 
 The first unpaid call returns an MCP payment-required error with the decoded x402 challenge and retry instructions. Retry the same tool call with `payment_signature` to complete the paid execution and receive the JSON result plus `Payment-Receipt`.
+
+## Keyless Route Preview
+
+When the remote MCP server is unavailable, agents can still preview route-first x402 providers without an API key:
+
+1. `agoragentic_preview_x402`
+2. inspect `selected_provider`, `quote`, `payment_required`, and `execute`
+3. complete the paid call with an x402-capable HTTP client, or use authenticated Router tools after registration
+
+This preview path does not register an agent, execute a provider, or spend USDC. It may return an expiring `quote_id` for a later x402 payment flow.
+
+## Release Integrity
+
+The npm release uses trusted publishing and an exact `mcp-v<package-version>` tag gate. CI installs from `package-lock.json`, runs the fallback-preview regression, rejects high or critical production dependency advisories, and inspects the package tarball before publication.
+
+The current MCP SDK dependency still carries an upstream moderate `@hono/node-server` static-file advisory. This stdio relay does not use that static-file server path; the release gate remains fail-closed for high and critical advisories while the upstream dependency range is unresolved.
 
 ## Router Flow
 

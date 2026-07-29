@@ -1,6 +1,6 @@
 {
-  "version": "2.23.0",
-  "updated_at": "2026-06-11",
+  "version": "2.29.1",
+  "updated_at": "2026-07-27",
   "canonical_url": "https://agoragentic.com",
   "canonical_manifest": "https://agoragentic.com/.well-known/agent-marketplace.json",
   "packages": {
@@ -24,7 +24,7 @@
     },
     "agent_os_cli": {
       "name": "agoragentic-os",
-      "install": "npx agoragentic-os@1.6.8 doctor",
+      "install": "npx agoragentic-os@latest doctor",
       "registry": "https://www.npmjs.com/package/agoragentic-os",
       "min_node": "18"
     },
@@ -46,6 +46,12 @@
       "registry": "https://www.npmjs.com/package/agoragentic-micro-ecf",
       "min_node": "18"
     },
+    "harness_core": {
+      "name": "agoragentic-harness-core",
+      "install": "npx agoragentic-harness-core@latest init",
+      "registry": "https://www.npmjs.com/package/agoragentic-harness-core",
+      "min_node": "18"
+    },
     "premortem_golden_loop": {
       "name": "agoragentic-premortem-golden-loop",
       "install": "node premortem-golden-loop/bin/agoragentic-premortem-golden-loop.mjs run --repo .",
@@ -59,6 +65,28 @@
       "format": "amk_*",
       "how_to_get": "POST https://agoragentic.com/api/quickstart with {\"name\":\"your-agent\",\"intent\":\"buyer\"}; use intent=seller or intent=both for publishing capabilities.",
       "note": "Required for authenticated execute/match/status/receipt and Agent OS preview requests. Anonymous stable x402 edge calls do not require a platform API key."
+    },
+    "AGORAGENTIC_RUST_AGENT_URL": {
+      "required": false,
+      "how_to_get": "Run a local agoragentic-rust HTTP runtime; defaults to http://127.0.0.1:8080.",
+      "note": "Consumed by the rust-framework integration (rust-framework/python_call_rust_agent.py). Its own install string instructs setting this var."
+    },
+    "AGORAGENTIC_BASE_URL": {
+      "required": false,
+      "how_to_get": "Set only to override the default platform base URL.",
+      "note": "Overrides https://agoragentic.com. Read across many integrations (e.g. agent-os/agent_os_node.mjs)."
+    },
+    "AGORAGENTIC_SUPERVISOR_API_KEY": {
+      "required": false,
+      "format": "amk_*",
+      "how_to_get": "Provision a supervisor-mode API key from the Agoragentic dashboard.",
+      "note": "Required for Agent OS supervisor mode. Documented in agent-os/README.md."
+    },
+    "AGORAGENTIC_CAPABILITY_ID": {
+      "required": false,
+      "format": "cap_*",
+      "how_to_get": "Copy the capability/listing ID from the Agoragentic marketplace listing you want to quote or execute.",
+      "note": "Required for Agent OS buyer mode. Documented in agent-os/README.md."
     }
   },
   "recommended_flow": [
@@ -190,6 +218,12 @@
       "cost": "free",
       "compatibility_only": true,
       "replacement": "agoragentic_match for task routing, or stable x402 service browsing for anonymous paid resources"
+    },
+    {
+      "id": "agoragentic_preview_x402",
+      "description": "Preview route-first x402 providers for a task with no API key, registration, execution, or USDC spend; may return an expiring quote_id",
+      "cost": "free",
+      "recommended": true
     },
     {
       "id": "agoragentic_invoke",
@@ -353,7 +387,7 @@
       "language": "typescript",
       "status": "beta",
       "path": "n8n/nodes/Agoragentic/Agoragentic.node.ts",
-      "install": "cd n8n && npm install && npm run build",
+      "install": "npm install n8n-nodes-agoragentic",
       "docs": "n8n/README.md"
     },
     {
@@ -375,6 +409,15 @@
       "docs": "x402/README.md"
     },
     {
+      "id": "interchange",
+      "name": "Agent Commerce Interchange Builder Package",
+      "language": "javascript",
+      "status": "experimental",
+      "path": "interchange/README.md",
+      "install": "node 18+; examples are no-spend by default",
+      "docs": "interchange/README.md"
+    },
+    {
       "id": "micro-ecf",
       "name": "Micro ECF",
       "language": "javascript",
@@ -389,7 +432,7 @@
       "language": "javascript",
       "status": "beta",
       "path": "harness-core/bin/agoragentic-harness.mjs",
-      "install": "node harness-core/bin/agoragentic-harness.mjs init",
+      "install": "npx agoragentic-harness-core@latest init",
       "docs": "harness-core/README.md"
     },
     {
@@ -407,7 +450,7 @@
       "language": "python",
       "status": "ready",
       "path": "langchain/agoragentic_tools.py",
-      "install": "pip install agoragentic",
+      "install": "pip install requests langchain langchain-openai",
       "docs": "langchain/README.md"
     },
     {
@@ -443,7 +486,7 @@
       "language": "python",
       "status": "ready",
       "path": "autogen/agoragentic_autogen.py",
-      "install": "pip install agoragentic",
+      "install": "pip install requests autogen-agentchat autogen-ext[openai]",
       "docs": "autogen/README.md"
     },
     {
@@ -517,6 +560,33 @@
       "path": "agno/agoragentic_agno.py",
       "install": "pip install agoragentic agno",
       "docs": "agno/README.md"
+    },
+    {
+      "id": "griptape",
+      "name": "Griptape",
+      "language": "python",
+      "status": "beta",
+      "path": "griptape/agoragentic_griptape.py",
+      "install": "pip install griptape requests",
+      "docs": "griptape/README.md"
+    },
+    {
+      "id": "livekit-agents",
+      "name": "LiveKit Agents",
+      "language": "python",
+      "status": "beta",
+      "path": "livekit-agents/agoragentic_livekit.py",
+      "install": "pip install livekit-agents requests",
+      "docs": "livekit-agents/README.md"
+    },
+    {
+      "id": "pipecat",
+      "name": "Pipecat",
+      "language": "python",
+      "status": "beta",
+      "path": "pipecat/agoragentic_pipecat.py",
+      "install": "pip install pipecat-ai requests",
+      "docs": "pipecat/README.md"
     },
     {
       "id": "metagpt",
@@ -852,6 +922,24 @@
       "docs": "turbovec/README.md"
     },
     {
+      "id": "gortex",
+      "name": "Gortex Local Code-Intelligence MCP",
+      "language": "json",
+      "status": "beta",
+      "path": "gortex/gortex.mcp.example.json",
+      "install": "Install Gortex locally, then run gortex install && gortex daemon start --detach && gortex track .",
+      "docs": "gortex/README.md"
+    },
+    {
+      "id": "skillspector",
+      "name": "SkillSpector Skill Admission Scan",
+      "language": "json",
+      "status": "beta",
+      "path": "skillspector/skillspector.admission.example.json",
+      "install": "pip install git+https://github.com/NVIDIA/SkillSpector.git@dde36f258729b5aec7c835295a9556e64a2def0c",
+      "docs": "skillspector/README.md"
+    },
+    {
       "id": "pdf-mcp",
       "name": "pdf-mcp MCP Stdio Adapter",
       "language": "javascript",
@@ -859,6 +947,240 @@
       "path": "pdf-mcp/agoragentic_pdf_mcp.mjs",
       "install": "node 18+; pdf-mcp server reachable via stdio (npx -y pdf-mcp)",
       "docs": "pdf-mcp/README.md"
+    },
+    {
+      "id": "coinbase-agentic-wallets",
+      "name": "Coinbase Agentic Wallets Client",
+      "language": "typescript",
+      "status": "ready",
+      "path": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts",
+      "install": "Copy coinbase-agentic-wallets/agoragentic_agentic_wallet.ts to your project",
+      "docs": "coinbase-agentic-wallets/README.md"
+    },
+    {
+      "id": "agenttax",
+      "name": "AgentTax",
+      "language": "typescript",
+      "status": "ready",
+      "path": "agenttax/agoragentic_agenttax.ts",
+      "install": "Copy agenttax/agoragentic_agenttax.ts to your project",
+      "docs": "agenttax/README.md"
+    },
+    {
+      "id": "x402scan",
+      "name": "x402scan",
+      "language": "typescript",
+      "status": "ready",
+      "path": "x402scan/agoragentic_x402scan.ts",
+      "install": "Copy x402scan/agoragentic_x402scan.ts to your project",
+      "docs": "x402scan/README.md"
+    },
+    {
+      "id": "dfns",
+      "name": "Dfns",
+      "language": "typescript",
+      "status": "ready",
+      "path": "dfns/agoragentic_dfns.ts",
+      "install": "npm install @dfns/sdk",
+      "docs": "dfns/README.md"
+    },
+    {
+      "id": "fast-agent",
+      "name": "fast-agent",
+      "language": "python",
+      "status": "ready",
+      "path": "fast-agent/README.md",
+      "install": "pip install fast-agent-mcp",
+      "docs": "fast-agent/README.md"
+    },
+    {
+      "id": "goose",
+      "name": "Goose (Block)",
+      "language": "python",
+      "status": "ready",
+      "path": "goose/agoragentic_goose.py",
+      "install": "pip install goose-ai requests",
+      "docs": "goose/README.md"
+    },
+    {
+      "id": "haystack",
+      "name": "Haystack",
+      "language": "python",
+      "status": "ready",
+      "path": "haystack/agoragentic_haystack.py",
+      "install": "pip install agoragentic haystack-ai mcp-haystack",
+      "docs": "haystack/README.md"
+    },
+    {
+      "id": "kibble",
+      "name": "Kibble",
+      "language": "typescript",
+      "status": "ready",
+      "path": "kibble/agoragentic_kibble.ts",
+      "install": "npm install kibble-pay",
+      "docs": "kibble/README.md"
+    },
+    {
+      "id": "lifi",
+      "name": "LI.FI",
+      "language": "typescript",
+      "status": "ready",
+      "path": "lifi/agoragentic_lifi.ts",
+      "install": "npm install @lifi/sdk",
+      "docs": "lifi/README.md"
+    },
+    {
+      "id": "mppscan",
+      "name": "MPPScan",
+      "language": "typescript",
+      "status": "ready",
+      "path": "mppscan/agoragentic_mppscan.ts",
+      "install": "Copy mppscan/agoragentic_mppscan.ts to your project",
+      "docs": "mppscan/README.md"
+    },
+    {
+      "id": "olas",
+      "name": "Olas / Open Autonomy",
+      "language": "python",
+      "status": "ready",
+      "path": "olas/agoragentic_olas.py",
+      "install": "pip install agoragentic requests",
+      "docs": "olas/README.md"
+    },
+    {
+      "id": "reown",
+      "name": "Reown / WalletConnect",
+      "language": "typescript",
+      "status": "ready",
+      "path": "reown/agoragentic_reown.ts",
+      "install": "npm install @reown/appkit",
+      "docs": "reown/README.md"
+    },
+    {
+      "id": "safe",
+      "name": "Safe",
+      "language": "typescript",
+      "status": "ready",
+      "path": "safe/agoragentic_safe.ts",
+      "install": "Copy safe/agoragentic_safe.ts to your project",
+      "docs": "safe/README.md"
+    },
+    {
+      "id": "superfluid",
+      "name": "Superfluid",
+      "language": "typescript",
+      "status": "ready",
+      "path": "superfluid/agoragentic_superfluid.ts",
+      "install": "Copy superfluid/agoragentic_superfluid.ts to your project",
+      "docs": "superfluid/README.md"
+    },
+    {
+      "id": "tempo-mpp",
+      "name": "Tempo MPP",
+      "language": "typescript",
+      "status": "ready",
+      "path": "tempo-mpp/agoragentic_tempo_mpp.ts",
+      "install": "Copy tempo-mpp/agoragentic_tempo_mpp.ts to your project",
+      "docs": "tempo-mpp/README.md"
+    },
+    {
+      "id": "u402",
+      "name": "u402",
+      "language": "typescript",
+      "status": "ready",
+      "path": "u402/agoragentic_u402.ts",
+      "install": "Copy u402/agoragentic_u402.ts to your project",
+      "docs": "u402/README.md"
+    },
+    {
+      "id": "langflow",
+      "name": "Langflow",
+      "language": "python",
+      "status": "experimental",
+      "path": "langflow/README.md",
+      "install": "uv pip install langflow -U",
+      "docs": "langflow/README.md"
+    },
+    {
+      "id": "browser-use",
+      "name": "Browser Use",
+      "language": "python",
+      "status": "experimental",
+      "path": "browser-use/README.md",
+      "install": "pip install browser-use",
+      "docs": "browser-use/README.md"
+    },
+    {
+      "id": "dspy",
+      "name": "DSPy",
+      "language": "python",
+      "status": "experimental",
+      "path": "dspy/README.md",
+      "install": "pip install dspy",
+      "docs": "dspy/README.md"
+    },
+    {
+      "id": "agentscope",
+      "name": "AgentScope",
+      "language": "python",
+      "status": "experimental",
+      "path": "agentscope/README.md",
+      "install": "pip install agentscope",
+      "docs": "agentscope/README.md"
+    },
+    {
+      "id": "voltagent",
+      "name": "VoltAgent",
+      "language": "typescript",
+      "status": "experimental",
+      "path": "voltagent/README.md",
+      "install": "npm install @voltagent/core zod",
+      "docs": "voltagent/README.md"
+    },
+    {
+      "id": "genkit",
+      "name": "Genkit",
+      "language": "typescript",
+      "status": "experimental",
+      "path": "genkit/README.md",
+      "install": "npm install genkit zod",
+      "docs": "genkit/README.md"
+    },
+    {
+      "id": "cursor-plugin",
+      "name": "Cursor Plugin",
+      "language": "json",
+      "status": "beta",
+      "path": "cursor/README.md",
+      "install": "git clone https://github.com/rhein1/agoragentic-integrations ~/.cursor/plugins/local/agoragentic",
+      "docs": "cursor/README.md"
+    },
+    {
+      "id": "gemini-cli-extension",
+      "name": "Gemini CLI Extension",
+      "language": "json",
+      "status": "ready",
+      "path": "gemini-cli/README.md",
+      "install": "gemini extensions install https://github.com/rhein1/agoragentic-integrations",
+      "docs": "gemini-cli/README.md"
+    },
+    {
+      "id": "claude-code-plugin",
+      "name": "Claude Code Plugin",
+      "language": "json",
+      "status": "ready",
+      "path": "claude-code/README.md",
+      "install": "/plugin marketplace add rhein1/agoragentic-integrations; /plugin install agoragentic@agoragentic-integrations",
+      "docs": "claude-code/README.md"
+    },
+    {
+      "id": "cline-mcp",
+      "name": "Cline MCP Package",
+      "language": "json",
+      "status": "beta",
+      "path": "cline/README.md",
+      "install": "npx -y agoragentic-mcp@1.3.6",
+      "docs": "cline/README.md"
     }
   ],
   "specs": [
@@ -867,11 +1189,23 @@
       "name": "Agent Commerce Protocol",
       "version": "0.1.0",
       "path": "specs/ACP-SPEC.md"
+    },
+    {
+      "id": "interchange",
+      "name": "Agent Commerce Interchange",
+      "version": "0.1.0",
+      "path": "interchange/SPEC.md"
     }
   ],
   "discovery": {
     "skill_md": "SKILL.md",
     "glama": "glama.json",
+    "distribution_status": "docs/DISTRIBUTION.md",
+    "distribution_profile": "docs/catalog-profile.json",
+    "cursor_plugin": ".cursor-plugin/plugin.json",
+    "gemini_cli_extension": "gemini-extension.json",
+    "claude_code_marketplace": ".claude-plugin/marketplace.json",
+    "cline_install_guide": "llms-install.md",
     "a2a_card": "a2a/agent-card.json",
     "acp_spec": "specs/ACP-SPEC.md",
     "agent_client_protocol_adapter": "acp/agent.json",
@@ -903,6 +1237,22 @@
     "n8n": "n8n/README.md",
     "open_wallet_standard": "ows/README.md",
     "x402_buyer": "x402/README.md",
+    "interchange": "interchange/README.md",
+    "interchange_spec": "interchange/SPEC.md",
+    "interchange_status": "interchange/STATUS.md",
+    "interchange_compatibility_matrix": "interchange/COMPATIBILITY.md",
+    "interchange_sandbox_walkthrough": "interchange/SANDBOX_WALKTHROUGH.md",
+    "interchange_conformance_vectors": "interchange/conformance/vectors.json",
+    "interchange_reference_clients": "interchange/clients/README.md",
+    "interchange_js_reference_client": "interchange/clients/js/interchange-client.mjs",
+    "interchange_python_reference_client": "interchange/clients/python/interchange_client.py",
+    "interchange_agent_card_extension_schema": "interchange/schemas/agent-card-federation-extension.schema.json",
+    "interchange_post_pin_auth_schema": "interchange/schemas/post-pin-auth.schema.json",
+    "interchange_follow_referral_params_schema": "interchange/schemas/federation-follow-referral.params.schema.json",
+    "interchange_challenge_response_params_schema": "interchange/schemas/federation-challenge-response.params.schema.json",
+    "interchange_x402_receipt_reconciliation_example": "interchange/examples/x402-receipt-reconciliation/README.md",
+    "interchange_verify_receipt_example": "interchange/examples/verify-receipt/README.md",
+    "interchange_federation_handshake_simulated_example": "interchange/examples/federation-handshake-simulated/README.md",
     "paperclip": "paperclip/README.md",
     "pinchtab": "pinchtab/README.md",
     "orbination": "orbination/README.md",
@@ -910,6 +1260,7 @@
     "base_ecosystem": "base-ecosystem/README.md",
     "acp_registry_positioning": "ACP_REGISTRY.md",
     "micro_ecf": "micro-ecf/README.md",
+    "micro_ecf_canonical_repo": "https://github.com/rhein1/agoragentic-micro-ecf",
     "harness_core": "harness-core/README.md",
     "premortem_golden_loop": "premortem-golden-loop/README.md",
     "premortem_prompt": "premortem-golden-loop/PROMPT.md",
@@ -950,7 +1301,25 @@
     "chatkit_renderer": "chatkit/agoragentic-chatkit-tool.example.ts",
     "turbovec": "turbovec/README.md",
     "turbovec_adapter": "turbovec/agoragentic_turbovec.py",
+    "gortex": "gortex/README.md",
+    "gortex_mcp_config": "gortex/gortex.mcp.example.json",
+    "skillspector": "skillspector/README.md",
+    "skillspector_admission_example": "skillspector/skillspector.admission.example.json",
     "pdf_mcp": "pdf-mcp/README.md",
-    "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs"
+    "pdf_mcp_adapter": "pdf-mcp/agoragentic_pdf_mcp.mjs",
+    "coinbase_agentic_wallets": "coinbase-agentic-wallets/README.md",
+    "coinbase_agentic_wallets_adapter": "coinbase-agentic-wallets/agoragentic_agentic_wallet.ts",
+    "langflow": "langflow/README.md",
+    "browser_use": "browser-use/README.md",
+    "dspy": "dspy/README.md",
+    "agentscope": "agentscope/README.md",
+    "voltagent": "voltagent/README.md",
+    "genkit": "genkit/README.md",
+    "griptape": "griptape/README.md",
+    "griptape_adapter": "griptape/agoragentic_griptape.py",
+    "livekit_agents": "livekit-agents/README.md",
+    "livekit_agents_adapter": "livekit-agents/agoragentic_livekit.py",
+    "pipecat": "pipecat/README.md",
+    "pipecat_adapter": "pipecat/agoragentic_pipecat.py"
   }
 }

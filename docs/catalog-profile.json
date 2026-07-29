@@ -1,0 +1,111 @@
+{
+  "schema": "agoragentic.integration-distribution.v1",
+  "version": "1.0.1",
+  "updated_at": "2026-07-24",
+  "product": {
+    "name": "Agoragentic",
+    "display_name": "Agoragentic for Triptych OS",
+    "short_description": "Preview and route agent capabilities through Triptych OS (Agent OS) with policy boundaries and receipt evidence.",
+    "repository": "https://github.com/rhein1/agoragentic-integrations",
+    "website": "https://agoragentic.com/integrations/",
+    "documentation": "https://agoragentic.com/developers/",
+    "support_email": "support@agoragentic.com",
+    "license": "MIT"
+  },
+  "assets": {
+    "icon_400": "assets/agoragentic-plugin-icon.png",
+    "social_card": "assets/agoragentic-integrations-social.png",
+    "social_card_source": "assets/agoragentic-agent-commerce-banner.svg"
+  },
+  "mcp": {
+    "registry_name": "io.github.rhein1/agoragentic",
+    "npm_package": "agoragentic-mcp",
+    "package_version": "1.3.6",
+    "command": "npx -y agoragentic-mcp@1.3.6",
+    "transport": "stdio-relay",
+    "remote_endpoint": "https://agoragentic.com/api/mcp",
+    "tool_inventory": "dynamic_and_auth_dependent",
+    "static_tool_count_allowed": false
+  },
+  "authority_boundary": {
+    "credentials_embedded": false,
+    "spend_authority_granted": false,
+    "wallet_mutation_authority_granted": false,
+    "x402_activation_authority_granted": false,
+    "marketplace_publication_authority_granted": false,
+    "deployment_authority_granted": false,
+    "trust_mutation_authority_granted": false,
+    "hosted_memory_write_authority_granted": false
+  },
+  "channels": [
+    {
+      "id": "npm",
+      "status": "active",
+      "url": "https://www.npmjs.com/package/agoragentic-mcp"
+    },
+    {
+      "id": "official-mcp-registry",
+      "status": "active",
+      "url": "https://registry.modelcontextprotocol.io/"
+    },
+    {
+      "id": "smithery",
+      "status": "active",
+      "url": "https://smithery.ai/servers/rhein1/agoragentic-mcp",
+      "note": "Listing metadata is current. Session counts include initialization and listability probes and must not be treated as tool-use evidence."
+    },
+    {
+      "id": "glama",
+      "status": "active",
+      "url": "https://glama.ai/mcp/servers/rhein1/agoragentic-integrations"
+    },
+    {
+      "id": "pulsemcp",
+      "status": "active",
+      "url": "https://www.pulsemcp.com/servers/agoragentic"
+    },
+    {
+      "id": "mcp-so",
+      "status": "support_escalated",
+      "url": "https://mcp.so/servers/agoragentic-integrations",
+      "note": "The owned listing editor did not persist current metadata and the ticket form produced no visible record. Support was emailed on 2026-07-23; repair and duplicate consolidation are not confirmed."
+    },
+    {
+      "id": "cursor-marketplace",
+      "status": "ready_for_submission",
+      "artifact": ".cursor-plugin/plugin.json",
+      "note": "The publisher form remains available and no submission receipt or Marketplace listing is confirmed."
+    },
+    {
+      "id": "gemini-cli-gallery",
+      "status": "install_ready",
+      "artifact": "gemini-extension.json",
+      "note": "The gemini-cli-extension GitHub topic is present; external gallery indexing is not confirmed."
+    },
+    {
+      "id": "claude-code-marketplace",
+      "status": "install_ready",
+      "artifact": ".claude-plugin/marketplace.json",
+      "note": "Self-hosted community marketplace; not an Anthropic-operated listing."
+    },
+    {
+      "id": "cline-marketplace",
+      "status": "submitted_pending_review",
+      "url": "https://github.com/cline/mcp-marketplace/issues/808",
+      "artifact": "llms-install.md",
+      "note": "The submission issue is open and was refreshed with a Cline CLI 3.0.46 install and tools/list smoke against agoragentic-mcp@1.3.6."
+    },
+    {
+      "id": "docker-mcp-catalog",
+      "status": "submitted_pending_review",
+      "url": "https://github.com/docker/mcp-registry/pull/4524",
+      "artifact": "Dockerfile",
+      "note": "The upstream PR pins source commit 19ffef3c73d0c33aafd17d60c6f7974b1abb4a72 and is mergeable but awaits Docker review."
+    },
+    {
+      "id": "openai-plugin-directory",
+      "status": "blocked_policy",
+      "note": "Do not submit the commerce MCP surface as a ChatGPT app/plugin while current OpenAI app rules prohibit digital-service commerce and execution of crypto transfers."
+    }
+  ]
+}
