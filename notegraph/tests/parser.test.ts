@@ -562,3 +562,24 @@ describe('byte order mark', () => {
     expect(note.links[0]?.target).toBe('Link');
   });
 });
+
+describe('pathological input performance', () => {
+  test('unclosed [[ runs parse in near-linear time', () => {
+    const singleLine = '[[ a'.repeat(512 * 1024);
+    const multiLine = '[[ a\n'.repeat(400 * 1024);
+    const started = performance.now();
+    const first = parseMarkdown(singleLine);
+    const second = parseMarkdown(multiLine);
+    const elapsedMs = performance.now() - started;
+    expect(first.links).toEqual([]);
+    expect(second.links).toEqual([]);
+    // Pre-fix these ~2MB inputs took 28s and 10s respectively; near-linear
+    // scanning finishes both in well under a second even on slow CI.
+    expect(elapsedMs).toBeLessThan(5000);
+  });
+
+  test('one closing ]] far down a [[-packed line still forms a single link', () => {
+    const note = parseMarkdown('[[' + 'x[['.repeat(1000) + 'end]]');
+    expect(note.links).toHaveLength(1);
+  });
+});

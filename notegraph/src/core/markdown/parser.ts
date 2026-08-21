@@ -7,6 +7,7 @@ import type {
 } from '../../shared/types';
 
 const CHAR_TAB = 9;
+const CHAR_RIGHT_BRACKET = 93;
 const CHAR_NEWLINE = 10;
 const CHAR_CARRIAGE_RETURN = 13;
 const CHAR_SPACE = 32;
@@ -110,7 +111,7 @@ export function parseMarkdown(source: string): ParsedNote {
     }
   }
 
-  function positionAt(offset: number): Pos {
+  function lineIndexAt(offset: number): number {
     let low = 0;
     let high = lineStarts.length - 1;
     while (low < high) {
@@ -122,8 +123,13 @@ export function parseMarkdown(source: string): ParsedNote {
         high = middle - 1;
       }
     }
-    const lineStart = lineStarts[low] ?? 0;
-    return { line: low, col: offset - lineStart, offset };
+    return low;
+  }
+
+  function positionAt(offset: number): Pos {
+    const line = lineIndexAt(offset);
+    const lineStart = lineStarts[line] ?? 0;
+    return { line, col: offset - lineStart, offset };
   }
 
   function spanOf(startOffset: number, endOffset: number): Span {
@@ -131,13 +137,15 @@ export function parseMarkdown(source: string): ParsedNote {
   }
 
   function lineInfoAt(offset: number): { contentEnd: number; nextLineStart: number } {
-    const newlineIndex = source.indexOf('\n', offset);
-    const lineEnd = newlineIndex === -1 ? length : newlineIndex;
+    // O(log lines) via the precomputed lineStarts table; a linear indexOf here
+    // made any scan calling this per-token quadratic on newline-free files.
+    const followingStart = lineStarts[lineIndexAt(offset) + 1];
+    const lineEnd = followingStart === undefined ? length : followingStart - 1;
     const contentEnd =
       lineEnd > offset && source.charCodeAt(lineEnd - 1) === CHAR_CARRIAGE_RETURN
         ? lineEnd - 1
         : lineEnd;
-    return { contentEnd, nextLineStart: newlineIndex === -1 ? length : newlineIndex + 1 };
+    return { contentEnd, nextLineStart: followingStart === undefined ? length : followingStart };
   }
 
   const note: ParsedNote = {
@@ -291,12 +299,30 @@ export function parseMarkdown(source: string): ParsedNote {
     return runEnd;
   }
 
+  // Once a line is known to hold no further ']]', later '[[' starts on that
+  // line can fail in O(1); without this memo a line packed with unclosed '[['
+  // rescans to the line end each time (quadratic on pasted-log notes).
+  let wikilinkFailedLineEnd = -1;
+
   function scanWikilink(start: number, embed: boolean, rawStart: number): number {
     // Line-confined like Obsidian, so a stray '[[' in prose cannot swallow
     // real links on later lines.
     const { contentEnd } = lineInfoAt(start);
-    const closing = source.indexOf(']]', start + 2);
-    if (closing === -1 || closing + 2 > contentEnd) {
+    if (contentEnd === wikilinkFailedLineEnd) {
+      return start + 2;
+    }
+    let closing = -1;
+    for (let cursor = start + 2; cursor <= contentEnd - 2; cursor++) {
+      if (
+        source.charCodeAt(cursor) === CHAR_RIGHT_BRACKET &&
+        source.charCodeAt(cursor + 1) === CHAR_RIGHT_BRACKET
+      ) {
+        closing = cursor;
+        break;
+      }
+    }
+    if (closing === -1) {
+      wikilinkFailedLineEnd = contentEnd;
       return start + 2;
     }
     const inner = source.slice(start + 2, closing);

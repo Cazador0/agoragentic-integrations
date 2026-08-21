@@ -20,7 +20,16 @@ const MIME = {
 
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://localhost:${port}`);
-  let pathname = decodeURIComponent(url.pathname);
+  let pathname;
+  try {
+    pathname = decodeURIComponent(url.pathname);
+  } catch {
+    // Malformed percent-encoding must not become an unhandled rejection that
+    // kills the process.
+    res.writeHead(400, { 'content-type': 'text/plain' });
+    res.end('bad request');
+    return;
+  }
   if (pathname === '/') pathname = '/index.html';
   const candidates = [
     join(root, 'dist/renderer', normalize(pathname).replace(/^([.][.][/\\])+/, '')),
@@ -41,6 +50,7 @@ const server = createServer(async (req, res) => {
   res.end('not found');
 });
 
-server.listen(port, () => {
+// Loopback only: a dev-only file server has no business being LAN-reachable.
+server.listen(port, '127.0.0.1', () => {
   console.log(`notegraph demo at http://localhost:${port}/`);
 });

@@ -79,6 +79,12 @@ export class VaultService {
   private async openInternal(vaultPath: string): Promise<VaultStats> {
     await this.closeInternal();
     const resolvedVaultPath = path.resolve(vaultPath);
+    const vaultStat = await stat(resolvedVaultPath).catch(() => null);
+    if (vaultStat === null || !vaultStat.isDirectory()) {
+      // Without this check a bad --vault flag or file path "succeeds" with an
+      // empty graph and the user gets no signal that the path was wrong.
+      throw new Error(`vault path is not a directory: ${resolvedVaultPath}`);
+    }
     const ignoreFilters = await readUserIgnoreFilters(resolvedVaultPath);
     const session: VaultSession = {
       vaultPath: resolvedVaultPath,

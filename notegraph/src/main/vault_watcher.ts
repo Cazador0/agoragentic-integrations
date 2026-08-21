@@ -41,6 +41,9 @@ export class VaultWatcher {
     const watcher = watch(this.vaultRoot, {
       ignored: (candidatePath: string) => this.hasDotSegment(candidatePath),
       ignoreInitial: false,
+      // A symlink cycle inside the vault would otherwise recurse until ELOOP,
+      // indexing every note dozens of times under distinct relative paths.
+      followSymlinks: false,
       awaitWriteFinish: { stabilityThreshold: 200, pollInterval: 50 },
     });
     this.watcher = watcher;

@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
 import * as path from 'node:path';
 import { IPC_CHANNELS } from '../shared/ipc';
+import { DEFAULT_GRAPH_FILTER } from '../shared/types';
 import type { GraphFilter } from '../shared/types';
 import { VaultService } from './vault_service';
 
@@ -31,13 +32,44 @@ function createMainWindow(): BrowserWindow {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
+  // The window must never leave the packaged renderer: Electron's default
+  // would navigate to any file dropped onto the window, replacing the app UI
+  // and running that document with the preload bridge exposed.
+  window.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+  });
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.loadFile(path.join(__dirname, '../renderer/index.html')).catch((error) => {
     console.error('notegraph: failed to load renderer', error);
   });
   return window;
+}
+
+// IPC payloads are renderer-supplied and may be partial or mistyped; clamp to
+// a well-formed GraphFilter instead of letting buildGraph throw.
+function sanitizeGraphFilter(candidate: unknown): GraphFilter {
+  const filter = { ...DEFAULT_GRAPH_FILTER };
+  if (candidate === null || typeof candidate !== 'object') {
+    return filter;
+  }
+  const record = candidate as Record<string, unknown>;
+  for (const flag of [
+    'showAttachments',
+    'showUnresolved',
+    'showTags',
+    'showOrphans',
+  ] as const) {
+    if (typeof record[flag] === 'boolean') {
+      filter[flag] = record[flag];
+    }
+  }
+  if (typeof record['query'] === 'string') {
+    filter.query = record['query'];
+  }
+  return filter;
 }
 
 ipcMain.handle(IPC_CHANNELS.openVaultDialog, async (): Promise<string | null> => {
@@ -48,12 +80,15 @@ ipcMain.handle(IPC_CHANNELS.openVaultDialog, async (): Promise<string | null> =>
   return result.filePaths[0] ?? null;
 });
 
-ipcMain.handle(IPC_CHANNELS.openVault, (_event, vaultPath: string) =>
-  vaultService.open(path.resolve(vaultPath)),
-);
+ipcMain.handle(IPC_CHANNELS.openVault, (_event, vaultPath: unknown) => {
+  if (typeof vaultPath !== 'string' || vaultPath === '') {
+    throw new Error('vault path must be a non-empty string');
+  }
+  return vaultService.open(path.resolve(vaultPath));
+});
 
-ipcMain.handle(IPC_CHANNELS.getGraph, (_event, filter?: GraphFilter) =>
-  vaultService.getGraph(filter),
+ipcMain.handle(IPC_CHANNELS.getGraph, (_event, filter?: unknown) =>
+  vaultService.getGraph(filter === undefined ? undefined : sanitizeGraphFilter(filter)),
 );
 
 ipcMain.handle(IPC_CHANNELS.getStats, () => vaultService.getStats());

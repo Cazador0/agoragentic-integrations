@@ -367,3 +367,17 @@ describe('computeStats', () => {
     });
   });
 });
+
+describe('unresolved label clamping', () => {
+  test('very long unresolved link text is clamped in label and id', () => {
+    const longText = 'x'.repeat(500);
+    const cache = buildCache({ 'S.md': `[[${longText}]]` });
+    const graph = buildGraph(cache);
+    const unresolved = graph.nodes.find((node) => node.kind === 'unresolved');
+    expect(unresolved).toBeDefined();
+    expect(unresolved!.label.length).toBe(121);
+    expect(unresolved!.label.endsWith('…')).toBe(true);
+    expect(unresolved!.id.length).toBeLessThan(140);
+    expect(graph.edges.some((edge) => edge.target === unresolved!.id)).toBe(true);
+  });
+});

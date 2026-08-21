@@ -243,3 +243,32 @@ describe('lifecycle races', () => {
     }
   }, 20000);
 });
+
+describe('vault path validation and symlinks', () => {
+  test('open() rejects a nonexistent path and a regular file', async () => {
+    const dir = await createVault({ 'note.md': '# Note\n' });
+    service = new VaultService();
+    await expect(service.open(path.join(dir, 'missing-subdir'))).rejects.toThrow(
+      /not a directory/,
+    );
+    await expect(service.open(path.join(dir, 'note.md'))).rejects.toThrow(/not a directory/);
+    expect(service.getStats()).toBeNull();
+  });
+
+  test('a symlink cycle inside the vault does not duplicate files', async () => {
+    const dir = await createVault({
+      'a.md': '# A\n[[b]]\n',
+      'b.md': '# B\n',
+    });
+    await mkdir(path.join(dir, 'sub'), { recursive: true });
+    const { symlink } = await import('node:fs/promises');
+    await symlink('..', path.join(dir, 'sub', 'loop'), 'dir');
+
+    service = new VaultService();
+    const stats = await service.open(dir);
+    expect(stats.fileCount).toBe(2);
+    expect(stats.noteCount).toBe(2);
+    const graph = service.getGraph();
+    expect(graph.nodes.map((node) => node.id).sort()).toEqual(['a.md', 'b.md']);
+  }, 20000);
+});

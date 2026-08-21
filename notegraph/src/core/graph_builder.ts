@@ -58,12 +58,17 @@ export function buildGraph(cache: MetadataCache, filter?: GraphFilter): GraphDat
       if (ref.resolvedPath !== null) {
         targetId = ref.resolvedPath;
       } else {
-        targetId = 'unresolved:' + ref.text.toLowerCase();
+        // A wikilink line has no length cap, and this text becomes a node
+        // label painted every frame plus an id serialized into every IPC
+        // graph event — clamp it. Deriving the id from the clamped text
+        // merges pathological same-prefix texts, which is acceptable.
+        const clampedText = ref.text.length > 120 ? ref.text.slice(0, 120) + '…' : ref.text;
+        targetId = 'unresolved:' + clampedText.toLowerCase();
         if (!nodesById.has(targetId)) {
           nodesById.set(targetId, {
             id: targetId,
             kind: 'unresolved',
-            label: ref.text,
+            label: clampedText,
             inDegree: 0,
             outDegree: 0,
           });
