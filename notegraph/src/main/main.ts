@@ -60,6 +60,7 @@ function sanitizeGraphFilter(candidate: unknown): GraphFilter {
     'showAttachments',
     'showUnresolved',
     'showTags',
+    'showMentions',
     'showOrphans',
   ] as const) {
     if (typeof record[flag] === 'boolean') {
@@ -92,6 +93,29 @@ ipcMain.handle(IPC_CHANNELS.getGraph, (_event, filter?: unknown) =>
 );
 
 ipcMain.handle(IPC_CHANNELS.getStats, () => vaultService.getStats());
+
+function requireNonEmptyString(value: unknown, label: string): string {
+  if (typeof value !== 'string' || value === '') {
+    throw new Error(`${label} must be a non-empty string`);
+  }
+  return value;
+}
+
+ipcMain.handle(IPC_CHANNELS.readNote, (_event, notePath: unknown) =>
+  vaultService.readNote(requireNonEmptyString(notePath, 'note path')),
+);
+
+ipcMain.handle(IPC_CHANNELS.writeNote, (_event, notePath: unknown, content: unknown) => {
+  const path_ = requireNonEmptyString(notePath, 'note path');
+  if (typeof content !== 'string') {
+    throw new Error('note content must be a string');
+  }
+  return vaultService.writeNote(path_, content);
+});
+
+ipcMain.handle(IPC_CHANNELS.createNote, (_event, notePath: unknown) =>
+  vaultService.createNote(requireNonEmptyString(notePath, 'note path')),
+);
 
 vaultService.on((event) => {
   const window = mainWindow;

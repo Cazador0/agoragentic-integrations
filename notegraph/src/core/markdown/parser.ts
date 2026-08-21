@@ -155,6 +155,7 @@ export function parseMarkdown(source: string): ParsedNote {
     tags: [],
     headings: [],
     blocks: [],
+    textSpans: [],
   };
 
   // A leading UTF-8 BOM (common in Windows-authored notes) must not defeat
@@ -188,6 +189,25 @@ export function parseMarkdown(source: string): ParsedNote {
       note.frontmatterSpan = spanOf(0, closingLine.contentEnd);
       bodyStart = closingLine.nextLineStart;
       break;
+    }
+  }
+
+  // Prose spans are the complement of everything the scanner skips, so they
+  // are accumulated as the single pass advances: each excluded zone closes the
+  // open run and reopens it past the zone. A second pass over the source would
+  // have to re-derive the same zone boundaries.
+  let proseStart = bodyStart;
+
+  function endProseRun(endOffset: number): void {
+    if (endOffset > proseStart) {
+      note.textSpans.push(spanOf(proseStart, endOffset));
+    }
+  }
+
+  function excludeFromProse(startOffset: number, endOffset: number): void {
+    endProseRun(startOffset);
+    if (endOffset > proseStart) {
+      proseStart = endOffset;
     }
   }
 
@@ -272,7 +292,7 @@ export function parseMarkdown(source: string): ParsedNote {
     note.headings.push({ level, text, span: spanOf(lineStart, contentEnd) });
   }
 
-  function skipInlineCode(start: number): number {
+  function scanInlineCode(start: number): { end: number; isCodeSpan: boolean } {
     let runEnd = start;
     while (runEnd < length && source.charCodeAt(runEnd) === CHAR_BACKTICK) {
       runEnd++;
@@ -289,14 +309,14 @@ export function parseMarkdown(source: string): ParsedNote {
           closingEnd++;
         }
         if (closingEnd - cursor === runLength) {
-          return closingEnd;
+          return { end: closingEnd, isCodeSpan: true };
         }
         cursor = closingEnd;
       } else {
         cursor++;
       }
     }
-    return runEnd;
+    return { end: runEnd, isCodeSpan: false };
   }
 
   // Once a line is known to hold no further ']]', later '[[' starts on that
@@ -361,6 +381,7 @@ export function parseMarkdown(source: string): ParsedNote {
     if (alias !== undefined) {
       link.alias = alias;
     }
+    excludeFromProse(rawStart, end);
     note.links.push(link);
     return end;
   }
@@ -414,7 +435,11 @@ export function parseMarkdown(source: string): ParsedNote {
       const titleIndex = rawDestination.search(/\s/);
       destination = titleIndex === -1 ? rawDestination : rawDestination.slice(0, titleIndex);
     }
+    // External destinations are not vault links, but the construct is still
+    // link syntax: keeping the URL as prose would let a path segment read as a
+    // mention of an unrelated note.
     if (URI_SCHEME_PATTERN.test(destination) || destination.startsWith('//')) {
+      excludeFromProse(rawStart, end);
       return end;
     }
     const hashIndex = destination.indexOf('#');
@@ -429,6 +454,7 @@ export function parseMarkdown(source: string): ParsedNote {
       target = pathPortion;
     }
     if (target === '' && fragment === undefined) {
+      excludeFromProse(rawStart, end);
       return end;
     }
     const label = source.slice(start + 1, labelEnd).trim();
@@ -444,6 +470,7 @@ export function parseMarkdown(source: string): ParsedNote {
     if (label !== '') {
       link.alias = label;
     }
+    excludeFromProse(rawStart, end);
     note.links.push(link);
     return end;
   }
@@ -520,7 +547,9 @@ export function parseMarkdown(source: string): ParsedNote {
       const { contentEnd, nextLineStart } = lineInfoAt(index);
       const fence = matchFenceOpening(index, contentEnd);
       if (fence !== null) {
-        index = skipFencedBlock(nextLineStart, fence.character, fence.length);
+        const fenceEnd = skipFencedBlock(nextLineStart, fence.character, fence.length);
+        excludeFromProse(index, fenceEnd);
+        index = fenceEnd;
         atLineStart = true;
         continue;
       }
@@ -533,12 +562,18 @@ export function parseMarkdown(source: string): ParsedNote {
       continue;
     }
     if (code === CHAR_BACKTICK) {
-      index = skipInlineCode(index);
+      const inlineCode = scanInlineCode(index);
+      if (inlineCode.isCodeSpan) {
+        excludeFromProse(index, inlineCode.end);
+      }
+      index = inlineCode.end;
       continue;
     }
     if (code === CHAR_PERCENT && source.charCodeAt(index + 1) === CHAR_PERCENT) {
       const commentClose = source.indexOf('%%', index + 2);
-      index = commentClose === -1 ? length : commentClose + 2;
+      const commentEnd = commentClose === -1 ? length : commentClose + 2;
+      excludeFromProse(index, commentEnd);
+      index = commentEnd;
       continue;
     }
     if (code === CHAR_OPEN_BRACKET) {
@@ -555,6 +590,7 @@ export function parseMarkdown(source: string): ParsedNote {
     }
     index++;
   }
+  endProseRun(length);
 
   return note;
 }

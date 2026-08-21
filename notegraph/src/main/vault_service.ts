@@ -1,4 +1,4 @@
-import { readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 import { MetadataCache, makeFileMetadata } from '../core/metadata_cache';
 import { buildGraph, computeStats } from '../core/graph_builder';
@@ -20,6 +20,35 @@ interface VaultSession {
 function isFileMissingError(error: unknown): boolean {
   return error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT';
 }
+
+/** Resolves a vault-relative note path to an absolute path INSIDE vaultRoot,
+ * or throws. Rejects absolute paths, drive prefixes, any path that escapes
+ * vaultRoot via '..' (checked after normalization so mixed separators and
+ * encoded traversal cannot slip through), empty paths, and anything that
+ * does not name a .md file — read/write/create only ever touch notes. */
+export function resolveVaultNotePath(vaultRoot: string, relPath: string): string {
+  if (typeof relPath !== 'string' || relPath === '') {
+    throw new Error('note path must be a non-empty string');
+  }
+  if (relPath.startsWith('/') || relPath.startsWith('\\') || /^[a-zA-Z]:/.test(relPath)) {
+    throw new Error(`note path must be vault-relative: ${relPath}`);
+  }
+  const normalized = path.normalize(relPath).split(path.sep).join('/');
+  if (normalized === '.' || normalized === '' || normalized.split('/').includes('..')) {
+    throw new Error(`note path escapes the vault: ${relPath}`);
+  }
+  if (!normalized.toLowerCase().endsWith('.md')) {
+    throw new Error(`note path must end in .md: ${relPath}`);
+  }
+  const resolvedRoot = path.resolve(vaultRoot);
+  const absolutePath = path.resolve(resolvedRoot, normalized);
+  const relativeToRoot = path.relative(resolvedRoot, absolutePath);
+  if (relativeToRoot === '' || relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
+    throw new Error(`note path escapes the vault: ${relPath}`);
+  }
+  return absolutePath;
+}
+
 
 // Obsidian keeps per-vault settings in .obsidian/app.json. The file is
 // optional and its schema belongs to Obsidian, so this read is best-effort:
@@ -135,6 +164,56 @@ export class VaultService {
     return () => {
       this.listeners.delete(listener);
     };
+  }
+
+  async readNote(relPath: string): Promise<string> {
+    const session = this.requireSession();
+    const absolutePath = resolveVaultNotePath(session.vaultPath, relPath);
+    return readFile(absolutePath, 'utf8');
+  }
+
+  async writeNote(relPath: string, content: string): Promise<void> {
+    const session = this.requireSession();
+    const absolutePath = resolveVaultNotePath(session.vaultPath, relPath);
+    // The watcher picks up this write and emits its own debounced graph event;
+    // no need to touch the cache here.
+    await writeFile(absolutePath, content, 'utf8');
+  }
+
+  async createNote(requestedRelPath: string): Promise<string> {
+    const session = this.requireSession();
+    const withExtension = requestedRelPath.toLowerCase().endsWith('.md')
+      ? requestedRelPath
+      : `${requestedRelPath}.md`;
+    const absoluteRoot = resolveVaultNotePath(session.vaultPath, withExtension);
+    const extension = '.md';
+    const withoutExtension = absoluteRoot.slice(0, -extension.length);
+    await mkdir(path.dirname(absoluteRoot), { recursive: true });
+    let candidate = absoluteRoot;
+    let suffix = 2;
+    // 'wx' makes the write itself the atomic existence check, so a file
+    // created between our probe and the write (e.g. by an external editor)
+    // still cannot be overwritten — we just retry the next suffix.
+    for (;;) {
+      try {
+        await writeFile(candidate, '', { encoding: 'utf8', flag: 'wx' });
+        break;
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'EEXIST') {
+          throw error;
+        }
+        candidate = `${withoutExtension} ${suffix}${extension}`;
+        suffix += 1;
+      }
+    }
+    return path.relative(session.vaultPath, candidate).split(path.sep).join('/');
+  }
+
+  private requireSession(): VaultSession {
+    if (this.session === null) {
+      throw new Error('no vault is open');
+    }
+    return this.session;
   }
 
   private async closeInternal(): Promise<void> {

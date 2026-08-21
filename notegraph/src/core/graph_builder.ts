@@ -14,6 +14,7 @@ const INCLUDE_EVERYTHING: GraphFilter = {
   showAttachments: true,
   showUnresolved: true,
   showTags: true,
+  showMentions: true,
   showOrphans: true,
   query: '',
 };

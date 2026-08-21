@@ -43,6 +43,7 @@ function filterWith(overrides: Partial<GraphFilter>): GraphFilter {
     showAttachments: true,
     showUnresolved: true,
     showTags: true,
+    showMentions: true,
     showOrphans: true,
     query: '',
     ...overrides,

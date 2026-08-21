@@ -452,6 +452,7 @@ describe('spans and encodings', () => {
       tags: [],
       headings: [],
       blocks: [],
+      textSpans: [],
     });
   });
 

@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
-import { VaultService } from '../src/main/vault_service';
+import { VaultService, resolveVaultNotePath } from '../src/main/vault_service';
 import { DEFAULT_GRAPH_FILTER } from '../src/shared/types';
 import type { GraphData, VaultEvent } from '../src/shared/types';
 
@@ -271,4 +271,68 @@ describe('vault path validation and symlinks', () => {
     const graph = service.getGraph();
     expect(graph.nodes.map((node) => node.id).sort()).toEqual(['a.md', 'b.md']);
   }, 20000);
+});
+
+describe('resolveVaultNotePath', () => {
+  const root = '/vault';
+
+  test('accepts a normal nested note path', () => {
+    expect(resolveVaultNotePath(root, 'projects/Roadmap.md')).toBe(
+      path.join(root, 'projects', 'Roadmap.md'),
+    );
+  });
+
+  test('rejects traversal, absolute paths, and non-markdown targets', () => {
+    expect(() => resolveVaultNotePath(root, '../outside.md')).toThrow(/escapes the vault/);
+    expect(() => resolveVaultNotePath(root, '/etc/passwd')).toThrow(/vault-relative/);
+    expect(() => resolveVaultNotePath(root, 'sub/../../x.md')).toThrow(/escapes the vault/);
+    expect(() => resolveVaultNotePath(root, '')).toThrow(/non-empty string/);
+    expect(() => resolveVaultNotePath(root, 'note.txt')).toThrow(/must end in \.md/);
+    expect(() => resolveVaultNotePath(root, 'C:/x.md')).toThrow(/vault-relative/);
+  });
+});
+
+describe('note read/write/create', () => {
+  test('readNote and writeNote round-trip content and the watcher re-indexes it', async () => {
+    const dir = await createVault({ 'a.md': '# A\n' });
+    service = new VaultService();
+    await service.open(dir);
+
+    expect(await service.readNote('a.md')).toBe('# A\n');
+    await service.writeNote('a.md', '# A\n[[b]]\n');
+    await waitForGraph(service, (graph) =>
+      graph.nodes.some((node) => node.id === 'unresolved:b'),
+    );
+    expect(await service.readNote('a.md')).toBe('# A\n[[b]]\n');
+  }, 20000);
+
+  test('readNote rejects a missing file', async () => {
+    const dir = await createVault({ 'a.md': '# A\n' });
+    service = new VaultService();
+    await service.open(dir);
+    await expect(service.readNote('missing.md')).rejects.toThrow();
+  });
+
+  test('createNote creates an empty file and de-duplicates a taken name', async () => {
+    const dir = await createVault({ 'a.md': '# A\n' });
+    service = new VaultService();
+    await service.open(dir);
+
+    const firstPath = await service.createNote('Untitled');
+    expect(firstPath).toBe('Untitled.md');
+    expect(await service.readNote('Untitled.md')).toBe('');
+
+    const secondPath = await service.createNote('Untitled.md');
+    expect(secondPath).toBe('Untitled 2.md');
+
+    const nestedPath = await service.createNote('sub/deep/Note');
+    expect(nestedPath).toBe('sub/deep/Note.md');
+  }, 20000);
+
+  test('readNote, writeNote, and createNote reject when no vault is open', async () => {
+    service = new VaultService();
+    await expect(service.readNote('a.md')).rejects.toThrow(/no vault is open/);
+    await expect(service.writeNote('a.md', 'x')).rejects.toThrow(/no vault is open/);
+    await expect(service.createNote('a')).rejects.toThrow(/no vault is open/);
+  });
 });

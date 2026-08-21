@@ -471,7 +471,7 @@ export class GraphView implements IGraphView {
       }
       batch.edgeIndexes.push(edgeIndex);
     }
-    const kindOrder: Record<EdgeKind, number> = { tag: 0, link: 1, embed: 2 };
+    const kindOrder: Record<EdgeKind, number> = { tag: 0, mention: 1, link: 2, embed: 3 };
     const edgeBatches = [...batchesByKey.values()].sort(
       (first, second) => kindOrder[first.kind] - kindOrder[second.kind] || first.lineWidth - second.lineWidth,
     );
