@@ -19,6 +19,12 @@ export const IPC_CHANNELS = {
   getStats: 'notegraph:get-stats',
   /** send: main → renderer. Streams VaultEvent updates. */
   vaultEvent: 'notegraph:vault-event',
+  /** invoke: renderer → main. Reads one vault-relative note as UTF-8 text. */
+  readNote: 'notegraph:read-note',
+  /** invoke: renderer → main. Writes UTF-8 text to a vault-relative note. */
+  writeNote: 'notegraph:write-note',
+  /** invoke: renderer → main. Creates a new empty note, returning its path. */
+  createNote: 'notegraph:create-note',
 } as const;
 
 export interface NotegraphBridge {
@@ -28,6 +34,20 @@ export interface NotegraphBridge {
   getStats(): Promise<VaultStats | null>;
   /** Subscribe to vault events; returns an unsubscribe function. */
   onVaultEvent(listener: (event: VaultEvent) => void): () => void;
+
+  // --- Editing -------------------------------------------------------------
+  // All paths are vault-relative with '/' separators. The main process must
+  // reject any path that escapes the open vault, and rejects entirely when no
+  // vault is open.
+
+  /** Reads a markdown note's UTF-8 contents. */
+  readNote(path: string): Promise<string>;
+  /** Overwrites a markdown note with `content`. */
+  writeNote(path: string, content: string): Promise<void>;
+  /** Creates a new empty markdown note. `path` is a requested vault-relative
+   * path (with or without a .md extension); the resolved path actually
+   * created is returned, which may differ if the requested name was taken. */
+  createNote(path: string): Promise<string>;
 }
 
 declare global {

@@ -79,6 +79,11 @@ export interface ParsedNote {
   tags: TagRef[];
   headings: HeadingRef[];
   blocks: BlockIdRef[];
+  /** Prose regions of the body: everything outside frontmatter, fenced code,
+   * inline code, %% comments, and link syntax. Unlinked-mention scanning must
+   * search only these, so a note's own links never count as mentions. Spans
+   * are ordered by start offset and never overlap. */
+  textSpans: Span[];
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +143,9 @@ export interface GraphNode {
   outDegree: number;
 }
 
-export type EdgeKind = 'link' | 'embed' | 'tag';
+/** 'mention' is an unlinked mention: the target note's name or alias appears
+ * as plain prose in the source note without a link. */
+export type EdgeKind = 'link' | 'embed' | 'tag' | 'mention';
 
 export interface GraphEdge {
   /** GraphNode.id of the source. */
@@ -160,6 +167,8 @@ export interface GraphFilter {
   showUnresolved: boolean;
   /** When true, tag hub nodes are added and files link to their tags. */
   showTags: boolean;
+  /** When true, unlinked mentions are added as 'mention' edges between notes. */
+  showMentions: boolean;
   /** When false, nodes with no visible edges are hidden. */
   showOrphans: boolean;
   /** Case-insensitive substring match against node labels; '' = no filter. */
@@ -170,6 +179,7 @@ export const DEFAULT_GRAPH_FILTER: GraphFilter = {
   showAttachments: true,
   showUnresolved: true,
   showTags: false,
+  showMentions: false,
   showOrphans: true,
   query: '',
 };
