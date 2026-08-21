@@ -252,15 +252,24 @@ export class GraphView implements IGraphView {
     const scale = this.camera.scale > 0 ? this.camera.scale : 1;
     const slack = PICK_SLACK_PX / scale;
     const simNodes = this.simulation.nodes;
-    for (let index = simNodes.length - 1; index >= 0; index--) {
-      const simNode = simNodes[index];
-      if (simNode === undefined) continue;
-      if (!Number.isFinite(simNode.x) || !Number.isFinite(simNode.y)) continue;
-      const deltaX = world.x - simNode.x;
-      const deltaY = world.y - simNode.y;
-      const threshold = simNode.radius + slack;
-      if (deltaX * deltaX + deltaY * deltaY <= threshold * threshold) {
-        return this.visibleNodes[index] ?? null;
+    // Walk in exact reverse paint order (kinds are painted per NODE_DRAW_ORDER,
+    // ascending index within a kind) so the visually topmost node wins.
+    for (let order = NODE_DRAW_ORDER.length - 1; order >= 0; order--) {
+      const kind = NODE_DRAW_ORDER[order];
+      if (kind === undefined) continue;
+      const indexes = this.nodeIndexesByKind[kind];
+      for (let position = indexes.length - 1; position >= 0; position--) {
+        const index = indexes[position];
+        if (index === undefined) continue;
+        const simNode = simNodes[index];
+        if (simNode === undefined) continue;
+        if (!Number.isFinite(simNode.x) || !Number.isFinite(simNode.y)) continue;
+        const deltaX = world.x - simNode.x;
+        const deltaY = world.y - simNode.y;
+        const threshold = simNode.radius + slack;
+        if (deltaX * deltaX + deltaY * deltaY <= threshold * threshold) {
+          return this.visibleNodes[index] ?? null;
+        }
       }
     }
     return null;

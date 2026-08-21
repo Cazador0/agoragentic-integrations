@@ -115,16 +115,21 @@ export function buildGraph(cache: MetadataCache, filter?: GraphFilter): GraphDat
   for (const meta of files) {
     for (const tag of meta.tags) {
       const tagId = 'tag:' + tag.toLowerCase();
-      if (!nodesById.has(tagId)) {
-        nodesById.set(tagId, {
+      let tagNode = nodesById.get(tagId);
+      if (tagNode === undefined) {
+        tagNode = {
           id: tagId,
           kind: 'tag',
           label: '#' + tag,
           inDegree: 0,
           outDegree: 0,
-        });
+        };
+        nodesById.set(tagId, tagNode);
       }
       edges.push({ source: meta.path, target: tagId, kind: 'tag', count: 1 });
+      // Tag edges stay out of file-node degrees, but the hub itself must scale
+      // with usage (as unresolved hubs do), so it takes the inbound count.
+      tagNode.inDegree += 1;
     }
   }
 

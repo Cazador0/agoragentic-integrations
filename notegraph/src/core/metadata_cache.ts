@@ -181,6 +181,10 @@ export class MetadataCache {
   private readonly pathsByLowerName = new Map<string, Set<string>>();
   private readonly pathsByLowerAlias = new Map<string, Set<string>>();
   private readonly unresolvedSourcesByLowerText = new Map<string, Set<string>>();
+  // Unresolved slash-containing texts indexed by their source-folder-joined
+  // path, so a new file promotes exactly the refs that could name it instead
+  // of a blanket retry (which made initial scans quadratic in broken links).
+  private readonly unresolvedSourcesByLowerJoinedPath = new Map<string, Set<string>>();
   private readonly inboundSourcesByTarget = new Map<string, Set<string>>();
   private readonly changeListeners = new Set<() => void>();
 
@@ -235,6 +239,7 @@ export class MetadataCache {
       // Inbound refs may have resolved through a now-removed alias.
       this.reresolveInboundSources(meta.path);
     }
+    this.reresolveShadowedCompetitors(meta);
     this.promoteMatchingUnresolved(meta);
     this.notifyChange();
   }
@@ -260,13 +265,18 @@ export class MetadataCache {
     if (meta === undefined) {
       return;
     }
-    const inbound = this.inboundSourcesByTarget.get(oldPath);
-    const affectedSources =
-      inbound === undefined ? [] : [...inbound].filter((s) => s !== oldPath && s !== newPath);
-
+    const affected = new Set(this.inboundSourcesByTarget.get(oldPath) ?? []);
     if (this.filesByPath.has(newPath)) {
+      // The overwritten file's inbound links (possibly alias-resolved) must be
+      // re-resolved too, or they keep pointing at metadata that no longer exists.
+      for (const source of this.inboundSourcesByTarget.get(newPath) ?? []) {
+        affected.add(source);
+      }
       this.removeFileEntry(newPath);
     }
+    affected.delete(oldPath);
+    affected.delete(newPath);
+    const affectedSources = [...affected];
     this.removeFileEntry(oldPath);
 
     const { basename, extension } = splitName(newPath);
@@ -285,6 +295,7 @@ export class MetadataCache {
     for (const source of affectedSources) {
       this.reresolveSource(source);
     }
+    this.reresolveShadowedCompetitors(movedMeta);
     this.promoteMatchingUnresolved(movedMeta);
     this.notifyChange();
   }
@@ -428,6 +439,12 @@ export class MetadataCache {
         unresolvedCounts ??= new Map();
         unresolvedCounts.set(ref.text, (unresolvedCounts.get(ref.text) ?? 0) + 1);
         addToSetMap(this.unresolvedSourcesByLowerText, ref.text.toLowerCase(), sourcePath);
+        if (ref.text.includes('/')) {
+          const joined = joinRelative(folderOf(sourcePath), ref.text);
+          if (joined !== null) {
+            addToSetMap(this.unresolvedSourcesByLowerJoinedPath, joined.toLowerCase(), sourcePath);
+          }
+        }
       }
     }
     if (resolvedCounts !== undefined) {
@@ -446,6 +463,12 @@ export class MetadataCache {
         removeFromSetMap(this.inboundSourcesByTarget, ref.resolvedPath, sourcePath);
       } else {
         removeFromSetMap(this.unresolvedSourcesByLowerText, ref.text.toLowerCase(), sourcePath);
+        if (ref.text.includes('/')) {
+          const joined = joinRelative(folderOf(sourcePath), ref.text);
+          if (joined !== null) {
+            removeFromSetMap(this.unresolvedSourcesByLowerJoinedPath, joined.toLowerCase(), sourcePath);
+          }
+        }
       }
     }
   }
@@ -496,18 +519,12 @@ export class MetadataCache {
         }
       }
     }
-    for (const [lowerText, sources] of this.unresolvedSourcesByLowerText) {
-      if (!lowerText.includes('/')) {
-        continue;
-      }
-      // Folder-qualified texts can only newly resolve to this file when they
-      // name a path suffix of it, except '..' texts whose meaning depends on
-      // each source's folder — those must always be retried.
-      const couldMatch =
-        lowerText.includes('..') ||
-        lowerPath.endsWith('/' + lowerText) ||
-        lowerPath.endsWith('/' + lowerText + '.md');
-      if (couldMatch) {
+    // Folder-qualified texts ('sub/x', './x', '../x') are indexed by their
+    // source-folder-joined path, so only refs whose relative form could name
+    // this file are retried; vault-absolute forms are covered by directKeys.
+    for (const key of [lowerPath, ...(lowerPath.endsWith('.md') ? [lowerPath.slice(0, -'.md'.length)] : [])]) {
+      const sources = this.unresolvedSourcesByLowerJoinedPath.get(key);
+      if (sources !== undefined) {
         for (const source of sources) {
           affectedSources.add(source);
         }
@@ -515,6 +532,47 @@ export class MetadataCache {
     }
     for (const source of affectedSources) {
       this.reresolveSource(source);
+    }
+  }
+
+  /** A newly indexed or renamed file may out-rank the current target of links
+   * that resolve through a basename, name, alias, or case-insensitive path it
+   * now shares; re-resolve the inbound links of those competitor files so
+   * resolution stays a function of vault content, not mutation order. */
+  private reresolveShadowedCompetitors(meta: FileMetadata): void {
+    const lowerPath = meta.path.toLowerCase();
+    const keys = new Set<string>();
+    keys.add(meta.basename.toLowerCase());
+    keys.add(lastSegmentOf(meta.path).toLowerCase());
+    for (const alias of meta.aliases) {
+      keys.add(alias.toLowerCase());
+    }
+    keys.add(lowerPath);
+    if (lowerPath.endsWith('.md')) {
+      keys.add(lowerPath.slice(0, -'.md'.length));
+    }
+    const competitors = new Set<string>();
+    const indexes = [
+      this.pathsByLowerBasename,
+      this.pathsByLowerName,
+      this.pathsByLowerAlias,
+      this.pathsByLowerPath,
+    ];
+    for (const key of keys) {
+      for (const index of indexes) {
+        const candidates = index.get(key);
+        if (candidates === undefined) {
+          continue;
+        }
+        for (const candidate of candidates) {
+          if (candidate !== meta.path) {
+            competitors.add(candidate);
+          }
+        }
+      }
+    }
+    for (const competitor of competitors) {
+      this.reresolveInboundSources(competitor);
     }
   }
 

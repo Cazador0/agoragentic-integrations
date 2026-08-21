@@ -166,6 +166,14 @@ export function attachController(host: ControllerHost): () => void {
     camera.scale = nextScale;
     camera.x = worldUnderPointer.x - (pointerX - canvas.clientWidth / 2) / nextScale;
     camera.y = worldUnderPointer.y - (pointerY - canvas.clientHeight / 2) / nextScale;
+    if (gesture === 'pan') {
+      // Re-base the pan anchors, or the next pointermove replays them at the
+      // new scale and teleports the viewport.
+      panCameraStartX = camera.x;
+      panCameraStartY = camera.y;
+      panPointerStartX = lastPointerX;
+      panPointerStartY = lastPointerY;
+    }
     host.markDirty();
   };
 

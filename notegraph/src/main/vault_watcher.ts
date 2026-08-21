@@ -28,6 +28,7 @@ export class VaultWatcher {
   private readonly callbacks: VaultWatcherCallbacks;
   private watcher: FSWatcher | undefined;
   private vaultRoot = '';
+  private pendingReady: (() => void) | null = null;
 
   constructor(callbacks: VaultWatcherCallbacks) {
     this.callbacks = callbacks;
@@ -58,7 +59,9 @@ export class VaultWatcher {
     });
 
     await new Promise<void>((resolve) => {
+      this.pendingReady = resolve;
       watcher.once('ready', () => {
+        this.pendingReady = null;
         this.callbacks.onReady();
         resolve();
       });
@@ -72,6 +75,11 @@ export class VaultWatcher {
     }
     this.watcher = undefined;
     await watcher.close();
+    // chokidar's close() removes all listeners, so a 'ready' that never fired
+    // would leave start() pending forever; settle it here instead.
+    const pending = this.pendingReady;
+    this.pendingReady = null;
+    pending?.();
   }
 
   // chokidar's `ignored` matcher may run without stats, so directories can

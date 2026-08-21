@@ -207,9 +207,10 @@ describe('degrees', () => {
     expect(nodeById(graph, 'Delta.md')).toMatchObject({ inDegree: 0, outDegree: 1 });
     expect(nodeById(graph, 'image.png')).toMatchObject({ inDegree: 2, outDegree: 0 });
     expect(nodeById(graph, 'unresolved:ghost note')).toMatchObject({ inDegree: 2, outDegree: 0 });
-    // Epsilon only carries a tag; tag edges never contribute to degrees.
+    // Epsilon only carries a tag; tag edges never contribute to file degrees.
     expect(nodeById(graph, 'Epsilon.md')).toMatchObject({ inDegree: 0, outDegree: 0 });
-    expect(nodeById(graph, 'tag:topic')).toMatchObject({ inDegree: 0, outDegree: 0 });
+    // The tag hub itself scales with usage: one inbound per tagged file.
+    expect(nodeById(graph, 'tag:topic')).toMatchObject({ inDegree: 3, outDegree: 0 });
     expect(nodeById(graph, 'Gamma.md')).toMatchObject({ inDegree: 0, outDegree: 0 });
   });
 

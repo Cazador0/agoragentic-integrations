@@ -58,10 +58,26 @@ function isIgnoredByFilters(relPath: string, filters: ReadonlyArray<string>): bo
 
 export class VaultService {
   private session: VaultSession | null = null;
+  // Serializes open()/close() so a later call always sees — and closes — the
+  // earlier call's session; overlapping opens would otherwise orphan a live
+  // chokidar watcher for the process lifetime.
+  private lifecycle: Promise<unknown> = Promise.resolve();
   private readonly listeners = new Set<(event: VaultEvent) => void>();
 
   async open(vaultPath: string): Promise<VaultStats> {
-    await this.close();
+    const run = this.lifecycle.catch(() => {}).then(() => this.openInternal(vaultPath));
+    this.lifecycle = run;
+    return run;
+  }
+
+  async close(): Promise<void> {
+    const run = this.lifecycle.catch(() => {}).then(() => this.closeInternal());
+    this.lifecycle = run;
+    return run;
+  }
+
+  private async openInternal(vaultPath: string): Promise<VaultStats> {
+    await this.closeInternal();
     const resolvedVaultPath = path.resolve(vaultPath);
     const ignoreFilters = await readUserIgnoreFilters(resolvedVaultPath);
     const session: VaultSession = {
@@ -115,7 +131,7 @@ export class VaultService {
     };
   }
 
-  async close(): Promise<void> {
+  private async closeInternal(): Promise<void> {
     const session = this.session;
     if (session === null) {
       return;

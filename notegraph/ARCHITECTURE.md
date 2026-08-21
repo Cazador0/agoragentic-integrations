@@ -80,8 +80,11 @@ already stripped:
    extension), then case-insensitive; on ties prefer the shortest path, then
    lexicographic. Aliases from frontmatter participate in basename lookup.
 4. Every set/delete/rename re-resolves affected links — including previously
-   unresolved links that a newly added file may now satisfy (index unresolved
-   by lowercase text for this).
+   unresolved links that a newly added file may now satisfy (indexed by
+   lowercase text and by source-folder-joined path), and existing resolved
+   links whose best target the new file now out-ranks (basename / name /
+   alias / case-insensitive-path competitors are re-resolved), so resolution
+   is a function of vault content, never of mutation order.
 
 ### `src/core/graph_builder.ts` — GraphData assembly
 Exports `buildGraph(cache: MetadataCache, filter?: GraphFilter): GraphData` and
@@ -96,6 +99,8 @@ the renderer applies user filtering client-side via `IGraphView.setFilter`.
   Tag edges: file → tag node, kind `tag`, count 1.
 - in/out-degree computed on the **unfiltered** graph, then filters applied
   (attachments / unresolved / tags / query substring on label / orphans last).
+  Tag edges never contribute to file-node degrees, but each one increments its
+  tag hub's `inDegree` so hubs scale with usage like unresolved nodes do.
 - Deterministic output ordering: nodes by id, edges by (source, target, kind).
 
 ### `src/main/vault_watcher.ts` — chokidar wrapper

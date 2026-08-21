@@ -195,3 +195,51 @@ describe('VaultService', () => {
     expect(hasEdge(filteredGraph, 'Alpha.md', 'unresolved:missing')).toBe(false);
   });
 });
+
+describe('lifecycle races', () => {
+  test('close() issued right after open() lets open settle instead of hanging', async () => {
+    const files: Record<string, string> = {};
+    for (let index = 0; index < 60; index++) {
+      files[`note-${index}.md`] = `# Note ${index}\n[[note-${(index + 1) % 60}]]\n`;
+    }
+    const dir = await createVault(files);
+    service = new VaultService();
+
+    const opening = service.open(dir);
+    const closing = service.close();
+    await expect(Promise.all([opening, closing])).resolves.toBeDefined();
+    expect(service.getStats()).toBeNull();
+  }, 20000);
+
+  test('back-to-back open() calls leave only the second vault active', async () => {
+    const firstDir = await createVault({ 'first.md': '# First\n' });
+    const secondDir = await mkdtemp(path.join(tmpdir(), 'notegraph-vault2-'));
+    await writeFile(path.join(secondDir, 'second.md'), '# Second\n', 'utf8');
+    try {
+      service = new VaultService();
+      const firstOpen = service.open(firstDir);
+      const secondOpen = service.open(secondDir);
+      await Promise.all([firstOpen, secondOpen]);
+
+      const stats = service.getStats();
+      expect(stats?.vaultPath).toBe(path.resolve(secondDir));
+      expect(stats?.noteCount).toBe(1);
+      const graph = service.getGraph(DEFAULT_GRAPH_FILTER);
+      expect(graph.nodes.map((node) => node.id)).toEqual(['second.md']);
+
+      // The first vault's watcher must be closed: changes there produce no events.
+      let sawFirstVaultEvent = false;
+      const unsubscribe = service.on((event) => {
+        if (event.type === 'file-changed' && event.path === 'first.md') {
+          sawFirstVaultEvent = true;
+        }
+      });
+      await writeFile(path.join(firstDir, 'first.md'), '# First edited\n', 'utf8');
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      unsubscribe();
+      expect(sawFirstVaultEvent).toBe(false);
+    } finally {
+      await rm(secondDir, { recursive: true, force: true });
+    }
+  }, 20000);
+});

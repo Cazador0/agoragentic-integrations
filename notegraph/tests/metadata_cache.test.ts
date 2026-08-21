@@ -457,3 +457,146 @@ describe('cache basics', () => {
     expect(cache.size).toBe(1);
   });
 });
+
+describe('resolved links follow better candidates (order independence)', () => {
+  test('a shorter-path duplicate basename rewires existing resolved links', () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('a/Note.md', ''));
+    cache.setFile(md('S.md', '[[Note]]'));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('a/Note.md');
+
+    cache.setFile(md('Note.md', ''));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('Note.md');
+    expect(cache.resolvedLinks.get('S.md')).toEqual(new Map([['Note.md', 1]]));
+    expect(cache.getBacklinks('Note.md')).toEqual(new Map([['S.md', 1]]));
+    expect(cache.getBacklinks('a/Note.md').size).toBe(0);
+  });
+
+  test('insertion order does not change the final resolution', () => {
+    const orders: Array<Array<[string, string]>> = [
+      [
+        ['a/Note.md', ''],
+        ['S.md', '[[Note]]'],
+        ['Note.md', ''],
+      ],
+      [
+        ['Note.md', ''],
+        ['a/Note.md', ''],
+        ['S.md', '[[Note]]'],
+      ],
+      [
+        ['S.md', '[[Note]]'],
+        ['Note.md', ''],
+        ['a/Note.md', ''],
+      ],
+    ];
+    const outcomes = orders.map((order) => {
+      const cache = new MetadataCache();
+      for (const [path, source] of order) {
+        cache.setFile(md(path, source));
+      }
+      return cache.getRefs('S.md')[0]?.resolvedPath;
+    });
+    expect(outcomes).toEqual(['Note.md', 'Note.md', 'Note.md']);
+  });
+
+  test('an alias-resolved link is displaced by a real file with that basename', () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('A.md', '---\naliases: [Nick]\n---\n'));
+    cache.setFile(md('S.md', '[[Nick]]'));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('A.md');
+
+    cache.setFile(md('Nick.md', ''));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('Nick.md');
+    expect(cache.getBacklinks('A.md').size).toBe(0);
+  });
+
+  test('a case-insensitive match is displaced by an exact-case file', () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('NOTE.md', ''));
+    cache.setFile(md('S.md', '[[note]]'));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('NOTE.md');
+
+    cache.setFile(md('note.md', ''));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('note.md');
+  });
+
+  test('renameFile into a shadowing position rewires existing resolved links', () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('a/Note.md', ''));
+    cache.setFile(md('Other.md', ''));
+    cache.setFile(md('S.md', '[[Note]]'));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('a/Note.md');
+
+    cache.renameFile('Other.md', 'Note.md');
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('Note.md');
+  });
+});
+
+describe('relative link promotion', () => {
+  test("a './'-prefixed markdown link is promoted when its target appears", () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('sub/a.md', '[sibling](./note.md)'));
+    expect(cache.getRefs('sub/a.md')[0]?.resolvedPath).toBeNull();
+
+    cache.setFile(md('sub/note.md', ''));
+    expect(cache.getRefs('sub/a.md')[0]?.resolvedPath).toBe('sub/note.md');
+    expect(cache.unresolvedLinks.has('sub/a.md')).toBe(false);
+  });
+
+  test("a '[[./sub/Thing]]' wikilink from a folder is promoted on target add", () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('projects/plan.md', '[[./sub/Thing]]'));
+    expect(cache.getRefs('projects/plan.md')[0]?.resolvedPath).toBeNull();
+
+    cache.setFile(md('projects/sub/Thing.md', ''));
+    expect(cache.getRefs('projects/plan.md')[0]?.resolvedPath).toBe('projects/sub/Thing.md');
+  });
+
+  test("a '../sibling/target' link is still promoted when the target file appears", () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('a/deep/s.md', '[up](../sibling/target.md)'));
+    expect(cache.getRefs('a/deep/s.md')[0]?.resolvedPath).toBeNull();
+
+    cache.setFile(md('a/sibling/target.md', ''));
+    expect(cache.getRefs('a/deep/s.md')[0]?.resolvedPath).toBe('a/sibling/target.md');
+    expect(cache.unresolvedLinks.has('a/deep/s.md')).toBe(false);
+  });
+
+  test("a vault-root relative link ('../x' joining to the root) is promoted", () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('folder/s.md', '[[../Top]]'));
+    expect(cache.getRefs('folder/s.md')[0]?.resolvedPath).toBeNull();
+
+    cache.setFile(md('Top.md', ''));
+    expect(cache.getRefs('folder/s.md')[0]?.resolvedPath).toBe('Top.md');
+  });
+});
+
+describe('renameFile onto an existing path', () => {
+  test("re-resolves links that reached the overwritten file through its alias", () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('A.md', '---\naliases: [Nick]\n---\n'));
+    cache.setFile(md('S.md', '[[Nick]]'));
+    cache.setFile(md('B.md', ''));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('A.md');
+
+    cache.renameFile('B.md', 'A.md');
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBeNull();
+    expect(cache.unresolvedLinks.get('S.md')?.get('Nick')).toBe(1);
+    expect(cache.getBacklinks('A.md').size).toBe(0);
+  });
+});
+
+describe('BOM tolerance', () => {
+  test('frontmatter tags and aliases survive a leading UTF-8 BOM', () => {
+    const cache = new MetadataCache();
+    cache.setFile(md('Bommed.md', '﻿---\ntags: [alpha]\naliases: [Nick]\n---\nBody\n'));
+    const meta = cache.getFile('Bommed.md');
+    expect(meta?.tags).toEqual(['alpha']);
+    expect(meta?.aliases).toEqual(['Nick']);
+
+    cache.setFile(md('S.md', '[[Nick]]'));
+    expect(cache.getRefs('S.md')[0]?.resolvedPath).toBe('Bommed.md');
+  });
+});

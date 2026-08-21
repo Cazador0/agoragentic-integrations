@@ -140,11 +140,15 @@ describe('wikilinks', () => {
     expect(note.tags.map((t) => t.tag)).toEqual(['tag']);
   });
 
-  test('closing ]] on a later line still forms the link', () => {
+  test('wikilinks are line-confined: a stray [[ never swallows later lines', () => {
     const note = parseMarkdown('a [[first\nsecond]] b');
+    expect(note.links).toEqual([]);
+  });
+
+  test('a stray [[ leaves real links on later lines intact', () => {
+    const note = parseMarkdown('I use [[ to open links.\nAlso check [[Real Note]].');
     expect(note.links).toHaveLength(1);
-    expect(note.links[0]?.target).toBe('first\nsecond');
-    expect(note.links[0]?.span).toEqual(span(pos(0, 2, 2), pos(1, 8, 18)));
+    expect(note.links[0]?.target).toBe('Real Note');
   });
 
   test('completely empty [[]] is not a link', () => {
@@ -540,5 +544,21 @@ describe('slugifyHeading', () => {
   test('empty and punctuation-only input', () => {
     expect(slugifyHeading('')).toBe('');
     expect(slugifyHeading('!!!')).toBe('');
+  });
+});
+
+describe('byte order mark', () => {
+  test('a leading UTF-8 BOM does not defeat frontmatter detection', () => {
+    const note = parseMarkdown('﻿---\ntags: [alpha]\n---\n# Title\n');
+    expect(note.frontmatter).toEqual({ tags: ['alpha'] });
+    expect(note.headings).toHaveLength(1);
+    expect(note.headings[0]?.text).toBe('Title');
+  });
+
+  test('a BOM on a file without frontmatter is harmless', () => {
+    const note = parseMarkdown('﻿# Title\n[[Link]]\n');
+    expect(note.frontmatter).toBeNull();
+    expect(note.headings[0]?.text).toBe('Title');
+    expect(note.links[0]?.target).toBe('Link');
   });
 });

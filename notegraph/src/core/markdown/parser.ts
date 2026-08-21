@@ -149,9 +149,12 @@ export function parseMarkdown(source: string): ParsedNote {
     blocks: [],
   };
 
-  let bodyStart = 0;
+  // A leading UTF-8 BOM (common in Windows-authored notes) must not defeat
+  // frontmatter detection; spans stay relative to the raw source.
+  const contentStart = source.charCodeAt(0) === 0xfeff ? 1 : 0;
+  let bodyStart = contentStart;
   const firstLine = lineInfoAt(0);
-  if (firstLine.contentEnd === 3 && source.startsWith('---')) {
+  if (firstLine.contentEnd - contentStart === 3 && source.startsWith('---', contentStart)) {
     for (let lineIndex = 1; lineIndex < lineStarts.length; lineIndex++) {
       const closingStart = lineStarts[lineIndex];
       if (closingStart === undefined) {
@@ -289,8 +292,11 @@ export function parseMarkdown(source: string): ParsedNote {
   }
 
   function scanWikilink(start: number, embed: boolean, rawStart: number): number {
+    // Line-confined like Obsidian, so a stray '[[' in prose cannot swallow
+    // real links on later lines.
+    const { contentEnd } = lineInfoAt(start);
     const closing = source.indexOf(']]', start + 2);
-    if (closing === -1) {
+    if (closing === -1 || closing + 2 > contentEnd) {
       return start + 2;
     }
     const inner = source.slice(start + 2, closing);
